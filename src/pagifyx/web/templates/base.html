@@ -7,7 +7,20 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-  <header class="topbar"><a href="/">pagifyx</a></header>
-  <main>{% block content %}{% endblock %}</main>
+  <header class="masthead"><a class="wordmark" href="/">pagifyx</a></header>
+  <main>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    // Steps call the model and can take a minute. Show that work is running and stop a double submit.
+    document.addEventListener("submit", (event) => {
+      const button = event.target.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Working...";
+      }
+    });
+  </script>
 </body>
 </html>

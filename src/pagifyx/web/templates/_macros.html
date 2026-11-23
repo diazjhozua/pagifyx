@@ -1,0 +1,34 @@
+{% macro step_line(current) -%}
+{% set steps = ["Read the website", "Choose settings", "Review and approve"] -%}
+<ol class="steps" aria-label="Progress">
+  {% for label in steps %}
+  <li{% if loop.index == current %} aria-current="step"{% endif %}>{{ label }}</li>
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
+{# One face of the sheet: its panels in print order, left to right. #}
+{% macro sheet_face(label, cards) -%}
+<section class="face" style="--cols: {{ cards|length }}" aria-label="{{ label }} face">
+  <h2 class="face-label">{{ label }}</h2>
+  <div class="panels">
+    {% for card in cards %}
+    <article class="panel{% if card.panel.generated %} draft{% endif %}">
+      <p class="panel-meta">Panel {{ card.number }}, {{ card.panel.section }}{% if card.panel.generated %} <span class="draft-tag">Generated</span>{% endif %}</p>
+      {% if card.image_url %}<img src="{{ card.image_url }}" alt="{{ card.alt }}">{% endif %}
+      {% if card.panel.headline %}<h3>{{ card.panel.headline }}</h3>{% endif %}
+      {% if card.panel.body %}<p class="body">{{ card.panel.body }}</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{%- endmacro %}
+
+{# A small drawing of one fold: two faces, each with one cell per panel. #}
+{% macro mini_sheet(per_side) -%}
+<span class="mini" aria-hidden="true">
+  {% for _ in range(2) %}
+  <span class="mini-face" style="--cols: {{ per_side }}">{% for _ in range(per_side) %}<i></i>{% endfor %}</span>
+  {% endfor %}
+</span>
+{%- endmacro %}

@@ -1,104 +1,318 @@
+/* Proof-sheet look: a table in neutral green-grey, paper sheets, ink text, one accent.
+   Fonts: Newsreader for headlines, Hanken Grotesk for everything else.
+   Both are OFL-licensed; the licence files sit next to them in static/fonts. */
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("/static/fonts/newsreader-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("/static/fonts/hanken-grotesk-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("/static/fonts/hanken-grotesk-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --ink: #1d1d1f;
-  --muted: #6b6b70;
-  --line: #e2e2e6;
-  --accent: #1f4e79;
-  --error: #b3261e;
+  --table: #e8eae5;
+  --paper: #fafaf7;
+  --ink: #1c211e;
+  --muted: #5c635e;
+  --hair: #c9cec8;
+  --control: #7d857f;
+  --fold: #8a918b;
+  --accent: #1e5c4f;
+  --accent-deep: #164a3f;
+  --error: #a32a2a;
+  --draft: #9a5b00;
+
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+
+  /* Type scale: 1.25 ratio on a 16px base, plus one small size for notes. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.95rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-xl: 1.953rem;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
   color: var(--ink);
-  background: #f5f5f7;
-  line-height: 1.5;
+  background: var(--table);
 }
 
-.topbar {
-  padding: 0.75rem 1.5rem;
-  background: #fff;
-  border-bottom: 1px solid var(--line);
+a { color: var(--accent); text-underline-offset: 3px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Masthead and page frame */
+
+.masthead {
+  padding: 1rem 2rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--hair);
 }
 
-.topbar a { color: var(--ink); font-weight: 600; text-decoration: none; }
-
-main { max-width: 1040px; margin: 2rem auto; padding: 0 1rem; }
-
-.card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.25rem;
+.wordmark {
+  font-family: var(--serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
 }
 
-h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
-h2 { font-size: 1.1rem; margin: 1.25rem 0 0.5rem; }
-h3 { font-size: 1.05rem; margin: 0.5rem 0 0.25rem; }
+main { max-width: 1120px; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
 
+.narrow { max-width: 44rem; }
+
+h1 {
+  font-family: var(--serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.75rem;
+}
+
+h2 { font-size: var(--text-base); font-weight: 600; margin: 0 0 0.5rem; }
+h3 {
+  font-family: var(--serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.lede { font-size: var(--text-md); line-height: 1.4; color: var(--muted); margin: 0 0 2rem; max-width: 36rem; }
 .muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: var(--text-sm); margin: 0 0 0.75rem; }
 .error { color: var(--error); font-weight: 600; }
+.note { font-size: var(--text-xs); color: var(--muted); margin: 1.25rem 0 0; }
 
-.stack { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+/* Progress: three steps, the current one underlined. */
 
-label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.95rem; }
+.steps {
+  display: flex;
+  gap: 2rem;
+  list-style: none;
+  margin: 0 0 2.5rem;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.steps li { padding-top: 0.6rem; border-top: 2px solid var(--hair); }
+.steps li[aria-current="step"] { color: var(--ink); font-weight: 600; border-color: var(--accent); }
+
+/* Forms */
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: var(--text-base);
+}
 
 input[type="text"], textarea {
   font: inherit;
-  padding: 0.5rem 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  color: var(--ink);
+  background: var(--paper);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--control);
+  border-radius: 2px;
+  width: 100%;
 }
 
-.option { flex-direction: row; align-items: baseline; gap: 0.5rem; }
+input[type="file"] { font: inherit; font-size: var(--text-xs); }
+
+fieldset {
+  border: 0;
+  margin: 2.25rem 0 0;
+  padding: 0;
+}
+
+legend {
+  font-family: var(--serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.stack { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+.actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
 
 button {
-  align-self: flex-start;
   font: inherit;
   font-weight: 600;
-  color: #fff;
+  color: var(--paper);
   background: var(--accent);
   border: 0;
-  border-radius: 8px;
-  padding: 0.55rem 1rem;
+  border-radius: 2px;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+button:hover { background: var(--accent-deep); }
+button:disabled { background: var(--accent); opacity: 0.6; cursor: progress; }
+
+/* Fold choice: each option shows its drawing of the sheet. */
+
+.option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--control);
   cursor: pointer;
 }
 
-button:hover { filter: brightness(1.08); }
+.option:has(input:checked) { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.option input { margin: 0; accent-color: var(--accent); }
+.option-text { display: flex; flex-direction: column; }
+.option-text .muted { font-size: var(--text-sm); }
 
+.mini {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 6.5rem;
+  padding: 4px;
+  border: 1px solid var(--muted);
+  background: var(--paper);
+}
+
+.mini-face { display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; height: 1.6rem; }
+.mini-face i { border: 1px solid var(--muted); }
+.mini-face + .mini-face { border-top: 1px dashed var(--fold); padding-top: 3px; }
+
+/* Facts about the read website */
+
+.facts { display: flex; flex-wrap: wrap; gap: 2rem; margin: 0 0 2rem; }
+.facts dt { font-size: var(--text-xs); color: var(--muted); }
+.facts dd { margin: 0; font-weight: 600; }
+
+/* Overview: the sheet on the left, decisions on the right. */
+
+.swatch {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border: 1px solid var(--control);
+  vertical-align: -0.1em;
+}
+
+.review {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.sheet {
+  padding: 1.5rem;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+}
+
+.face + .face {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed var(--fold);
+}
+
+.face-label {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Gap of 1px over a hairline background draws the fold lines between panels. */
 .panels {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 1px;
+  background: var(--hair);
+  border: 1px solid var(--hair);
 }
 
 .panel {
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 15rem;
   padding: 1rem;
-  background: #fff;
+  background: var(--paper);
 }
 
-.panel img { width: 100%; height: 140px; object-fit: cover; border-radius: 6px; }
+.panel img { width: 100%; height: 7.5rem; object-fit: cover; margin-bottom: 0.25rem; }
+.panel-meta { margin: 0; font-size: var(--text-xs); color: var(--muted); }
+.body { margin: 0; font-size: var(--text-sm); line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
 
-.panel-meta { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+/* Panels whose wording the model wrote, not the website: dashed amber outline. */
+.panel.draft { outline: 1.5px dashed var(--draft); outline-offset: -7px; }
+.draft-tag { color: var(--draft); font-weight: 600; }
 
-.body { white-space: pre-line; margin: 0.25rem 0 0; }
+/* Side column: revisions and approval, each under a rule. */
 
-/* Panels whose wording the model wrote, not the website. Shown dashed so they stand out. */
-.panel.draft { border-style: dashed; border-color: #b45309; background: #fffbeb; }
-.draft-tag { color: #92400e; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.side { position: sticky; top: 1.5rem; }
 
-.chat { list-style: none; padding: 0; margin: 0 0 0.75rem; }
-
-.chat-user {
-  background: #eef3f9;
-  border-radius: 10px;
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.4rem;
+.block {
+  padding-top: 1rem;
+  margin-bottom: 2rem;
+  border-top: 1px solid var(--ink);
 }
 
-a { color: var(--accent); }
+.chat {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  border-left: 2px solid var(--hair);
+}
+
+.chat li { padding: 0.25rem 0 0.25rem 0.9rem; font-size: var(--text-sm); overflow-wrap: anywhere; }
+
+/* Below 1000px the sheet keeps its three columns; only the side column moves under it. */
+@media (max-width: 1000px) {
+  main { padding: 1.5rem 1rem 3rem; }
+  .review { grid-template-columns: 1fr; gap: 1.5rem; }
+  .side { position: static; }
+  .option { grid-template-columns: auto 1fr; }
+  .option .mini { grid-column: 2; }
+}
+
+@media (max-width: 600px) {
+  .panels { grid-template-columns: minmax(0, 1fr); }
+  .panel { min-height: 0; }
+}

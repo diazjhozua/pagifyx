@@ -2,14 +2,14 @@
 
 from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from pagifyx.core.folds import get_fold_spec
-from pagifyx.core.models import FoldType, Preset
+from pagifyx.core.folds import face_panels, get_fold_spec
+from pagifyx.core.models import LOGO_IMAGE_ID, FoldType, Panel, Preset
 from pagifyx.llm.client import LLMError
 from pagifyx.reading.scraper import ScrapeError
 from pagifyx.workflow.service import (
@@ -85,6 +85,36 @@ def _image_url(session: Session, image_id: str | None) -> str | None:
     return f"/sessions/{session.id}/files/{path.name}" if path is not None else None
 
 
+class _Card(NamedTuple):
+    """One panel as the overview shows it."""
+
+    number: int
+    panel: Panel
+    image_url: str | None
+    alt: str
+
+
+def _alt_text(session: Session, image_id: str | None) -> str:
+    if image_id is None:
+        return ""
+    if image_id == LOGO_IMAGE_ID:
+        return "Logo"
+    return next((image.alt for image in session.images if image.image_id == image_id), "")
+
+
+def _cards(session: Session, panels: list[Panel], first_number: int) -> list[_Card]:
+    """Panels with their print numbers, counted across both faces."""
+    return [
+        _Card(
+            number=number,
+            panel=panel,
+            image_url=_image_url(session, panel.image_id),
+            alt=_alt_text(session, panel.image_id),
+        )
+        for number, panel in enumerate(panels, start=first_number)
+    ]
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, deps: DepsDep) -> HTMLResponse:
     return deps.templates.TemplateResponse(request, "index.html", {})
@@ -135,8 +165,21 @@ async def choose_fold(
     font_family: Annotated[str, Form()] = "",
     logo: Annotated[UploadFile | None, File()] = None,
 ) -> RedirectResponse:
+    # Keep what the user typed, so the settings page shows it again after a failed step.
+    session.settings_form = {
+        "fold": fold,
+        "brand_name": brand_name,
+        "tagline": tagline,
+        "phone": phone,
+        "email": email,
+        "address": address,
+        "primary_color": primary_color,
+        "font_family": font_family,
+    }
+
     async def apply() -> None:
         chosen = _parse_fold(fold)
+        theme = build_theme_overrides(primary_color=primary_color, font_family=font_family)
         logo_path = session.brand_overrides.logo_path
         if logo is not None and logo.filename:
             logo_path = save_logo_upload(session, await logo.read())
@@ -148,7 +191,6 @@ async def choose_fold(
             email=email,
             address=address,
         )
-        theme = build_theme_overrides(primary_color=primary_color, font_family=font_family)
         await deps.service.choose_fold(session, chosen, brand, theme)
 
     if not await _attempt(session, apply()):
@@ -161,20 +203,16 @@ async def overview_page(request: Request, deps: DepsDep, session: SessionDep) ->
     plan = session.overview
     if plan is None:
         return _redirect(f"/sessions/{session.id}")
-    cards = [
-        {
-            "number": number,
-            "panel": panel,
-            "image_url": _image_url(session, panel.image_id),
-        }
-        for number, panel in enumerate(plan.panels, start=1)
-    ]
+    spec = get_fold_spec(plan.fold)
+    outside, inside = face_panels(plan, spec)
     context = {
         "session": session,
-        "spec": get_fold_spec(plan.fold),
+        "spec": spec,
         "preset": _PRESET_LABELS[plan.design.preset],
-        "cards": cards,
-        "revisions": session.revisions,
+        "primary": session.theme_overrides.primary_color or plan.design.primary,
+        "outside": _cards(session, outside, 1),
+        "inside": _cards(session, inside, len(outside) + 1),
+        "has_generated": any(panel.generated for panel in plan.panels),
         "error": session.take_error(),
     }
     return deps.templates.TemplateResponse(request, "overview.html", context)

@@ -1,48 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Overview · pagifyx{% endblock %}
+{% from "_macros.html" import step_line, sheet_face %}
+{% block title %}pagifyx: review plan{% endblock %}
 {% block content %}
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<section class="card">
-  <h1>{{ spec.label }} · {{ preset }} style</h1>
-  <p class="muted">{{ spec.description }} Review each panel, request revisions, then approve.</p>
-  <p class="muted">Panels marked Generated contain wording that is not on the website. Check them before printing.</p>
-  <div class="panels">
-    {% for card in cards %}
-    <article class="panel{% if card.panel.generated %} draft{% endif %}">
-      <div class="panel-meta">Panel {{ card.number }} · {{ card.panel.section }}{% if card.panel.generated %} · <span class="draft-tag">Generated</span>{% endif %}</div>
-      {% if card.image_url %}<img src="{{ card.image_url }}" alt="">{% endif %}
-      {% if card.panel.headline %}<h3>{{ card.panel.headline }}</h3>{% endif %}
-      {% if card.panel.body %}<p class="body">{{ card.panel.body }}</p>{% endif %}
-    </article>
-    {% endfor %}
-  </div>
-</section>
+{{ step_line(3) }}
+<div class="review">
+  <section>
+    <h1>{{ spec.label }}</h1>
+    <p class="lede">{{ preset }} style. {{ spec.description }} <span class="swatch" style="background: {{ primary }}" aria-hidden="true"></span> Primary colour {{ primary }}.</p>
+    <div class="sheet">
+      {{ sheet_face("Outside", outside) }}
+      {{ sheet_face("Inside", inside) }}
+    </div>
+    {% if has_generated %}
+    <p class="note">Panels marked Generated contain wording that is not on the website. Check them before printing.</p>
+    {% endif %}
+  </section>
 
-<section class="card">
-  <h2>Revisions</h2>
-  {% if revisions %}
-  <ul class="chat">
-    {% for note in revisions %}<li class="chat-user">{{ note }}</li>{% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">No revisions requested yet.</p>
-  {% endif %}
-  <form method="post" action="/sessions/{{ session.id }}/revise" class="stack">
-    <label>Describe a change
-      <textarea name="message" rows="3" required placeholder="For example: shorten the headline on panel 2"></textarea>
-    </label>
-    <button type="submit">Send revision</button>
-  </form>
-</section>
+  <aside class="side">
+    <section class="block">
+      <h2>Revisions</h2>
+      {% if session.revisions %}
+      <ul class="chat">
+        {% for note in session.revisions %}<li>{{ note }}</li>{% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">No revisions requested yet.</p>
+      {% endif %}
+      <form method="post" action="/sessions/{{ session.id }}/revise" class="stack">
+        <label>Describe a change
+          <textarea name="message" rows="3" required placeholder="For example: shorten the headline on panel 2"></textarea>
+        </label>
+        <button type="submit">Send revision</button>
+      </form>
+    </section>
 
-<section class="card">
-  <h2>Approve</h2>
-  <form method="post" action="/sessions/{{ session.id }}/approve">
-    <button type="submit">Approve and build .docx</button>
-  </form>
-  {% if session.brochure_path %}
-  <p><a href="/sessions/{{ session.id }}/download">Download brochure.docx</a></p>
-  {% endif %}
-  <p><a href="/sessions/{{ session.id }}">Back to fold and brand settings</a></p>
-</section>
+    <section class="block">
+      <h2>Approve</h2>
+      <form method="post" action="/sessions/{{ session.id }}/approve">
+        <button type="submit">Approve and build .docx</button>
+      </form>
+      {% if session.brochure_path %}
+      <p><a href="/sessions/{{ session.id }}/download">Download brochure.docx</a></p>
+      {% endif %}
+      <p><a href="/sessions/{{ session.id }}">Back to settings</a></p>
+    </section>
+  </aside>
+</div>
 {% endblock %}

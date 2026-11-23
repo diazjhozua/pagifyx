@@ -1,4 +1,6 @@
 import json
+import struct
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -177,6 +179,7 @@ def test_model_chooses_the_fold_when_the_form_leaves_it_blank(
     session_id = open_site(client)
 
     response = client.post(f"/sessions/{session_id}/fold", data=fold_form(fold=""))
+    assert response.url.path.endswith("/overview")
     assert "Half-fold" in response.text
 
 
@@ -192,7 +195,10 @@ def test_failed_fold_change_keeps_the_previous_plan(
     assert "did not return valid output" in response.text
 
     overview = client.get(f"/sessions/{session_id}/overview")
-    assert "Tri-fold · Paper style" in overview.text
+    assert "Tri-fold" in overview.text
+    assert "Paper style" in overview.text
+    assert 'aria-label="Outside face"' in overview.text
+    assert 'aria-label="Inside face"' in overview.text
     client.post(f"/sessions/{session_id}/approve")
     built = Path(settings.output_dir) / session_id / "brochure.docx"
     assert [len(table.columns) for table in Document(built).tables] == [3, 3]
@@ -295,6 +301,95 @@ def test_build_theme_overrides_validates_color() -> None:
     overrides = build_theme_overrides(primary_color="#1f4e79", font_family=" Georgia ")
     assert overrides.primary_color == "#1F4E79"
     assert overrides.font_family == "Georgia"
+
+
+def test_settings_page_keeps_typed_values_after_a_failed_step(
+    settings: Settings, make_chat: Any, stub_scrape: None
+) -> None:
+    chat, _ = make_chat([ANALYSIS_JSON, "bad", "bad", "bad", "bad"])
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+    client.post(f"/sessions/{session_id}/fold", data=fold_form("half", brand_name="Typed name"))
+
+    page = client.get(f"/sessions/{session_id}")
+    assert 'value="Typed name"' in page.text
+    assert 'value="half" checked' in page.text
+
+    client.post(f"/sessions/{session_id}/fold", data=fold_form("half", brand_name=""))
+    page = client.get(f"/sessions/{session_id}")
+    assert 'value="Acme"' in page.text  # a blank field shows the value the plan will use
+
+
+def png_bytes(red: int) -> bytes:
+    """A 16 by 16 PNG built by hand, so the test needs no image library."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+    raw = b"".join(b"\x00" + bytes([red, 0, 0]) * 16 for _ in range(16))
+    header = struct.pack(">IIBBBBB", 16, 16, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
+def test_failed_step_keeps_the_approved_logo(
+    settings: Settings, make_chat: Any, stub_scrape: None
+) -> None:
+    chat, _ = make_chat([ANALYSIS_JSON, plan_json("tri"), "bad", "bad"])
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+    client.post(
+        f"/sessions/{session_id}/fold",
+        data=fold_form("tri"),
+        files={"logo": ("first.png", png_bytes(200), "image/png")},
+    )
+    session = client.app.state.deps.store.get(session_id)
+    approved = session.brand_overrides.logo_path
+    assert approved is not None
+    approved_bytes = approved.read_bytes()
+
+    client.post(
+        f"/sessions/{session_id}/fold",
+        data=fold_form("tri"),
+        files={"logo": ("second.png", png_bytes(40), "image/png")},
+    )
+
+    assert session.brand_overrides.logo_path == approved
+    assert approved.read_bytes() == approved_bytes
+
+
+def test_pasted_text_reads_a_blocked_site(
+    settings: Settings, make_chat: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def blocked(raw_url: str) -> SiteSnapshot:
+        raise ScrapeError("blocked by site")
+
+    monkeypatch.setattr("pagifyx.workflow.service.scrape_site", blocked)
+    chat, _ = make_chat([ANALYSIS_JSON])
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+
+    response = client.post(f"/sessions/{session_id}/paste", data={"text": "Acme builds widgets."})
+    assert "Generate overview" in response.text
+    assert "Use pasted text" not in response.text
+
+
+def test_files_route_serves_only_files_in_the_session_assets(
+    settings: Settings, make_chat: Any, stub_scrape: None
+) -> None:
+    chat, _ = make_chat([ANALYSIS_JSON])
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+    assets = client.app.state.deps.store.get(session_id).assets_dir
+    assets.mkdir(parents=True, exist_ok=True)
+    (assets / "photo.png").write_bytes(b"png-bytes")
+
+    assert client.get(f"/sessions/{session_id}/files/photo.png").content == b"png-bytes"
+    assert client.get(f"/sessions/{session_id}/files/missing.png").status_code == 404
 
 
 def test_save_logo_upload_rejects_non_image(tmp_path: Path) -> None:
