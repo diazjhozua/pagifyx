@@ -93,7 +93,8 @@ def save_logo_upload(session: Session, data: bytes) -> Path:
     """Store a user-uploaded logo after checking that python-docx can embed it."""
     if len(data) > MAX_LOGO_BYTES:
         raise BrochureError("The logo must be 5 MB or smaller.")
-    path = store_logo(session.assets_dir, data, stem="logo-upload")
+    # A new name per upload: the logo in use by the current plan is never overwritten.
+    path = store_logo(session.assets_dir, data, stem=f"logo-upload-{uuid4().hex[:8]}")
     if path is None:
         raise BrochureError("The logo must be a PNG or JPEG image that Word can embed.")
     return path
@@ -261,8 +262,11 @@ class BrochureService:
                 [request],
                 _plan_check(session, logo, brand, contact_available=contact_available, fold=fold),
             )
+            replaced_logo = session.brand_overrides.logo_path
             session.brand_overrides = brand
             session.theme_overrides = theme
+            if replaced_logo is not None and replaced_logo != brand.logo_path:
+                replaced_logo.unlink(missing_ok=True)
             session.fold = plan.fold
             session.overview = plan
             session.history = [request, assistant_turn(overview_as_json(plan))]

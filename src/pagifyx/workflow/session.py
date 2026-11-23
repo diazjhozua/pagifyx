@@ -30,6 +30,7 @@ class Session:
     source_text: str = ""
     brand_overrides: BrandOverrides = field(default_factory=BrandOverrides)
     theme_overrides: ThemeOverrides = field(default_factory=ThemeOverrides)
+    settings_form: dict[str, str] = field(default_factory=dict)
     fold: FoldType | None = None
     overview: Overview | None = None
     history: list[ChatCompletionMessageParam] = field(default_factory=list)
@@ -53,7 +54,8 @@ class Session:
         return paths
 
     def clear_plan(self) -> None:
-        """Drop the fold, Overview, chat, and built file. Called when the source changes."""
+        """Drop the fold, Overview, chat, built file, and the last submitted settings."""
+        self.settings_form = {}
         self.fold = None
         self.overview = None
         self.history = []
