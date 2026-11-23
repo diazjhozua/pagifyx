@@ -30,7 +30,7 @@ The original plan is built. This section is the reference for working on it.
 ### Developer notes
 
 - Setup: `uv python install 3.12`, `uv sync`, `uv run playwright install chromium`. Copy `.env.template` to `.env` first. The app fails at startup without the three LLM variables.
-- Checks: `uv run ruff format src tests`, `uv run ruff check src tests`, `uv run pytest`. The 88 tests are offline. They use the `make_chat` fixture (scripted LLM) and monkeypatch `pagifyx.workflow.service.scrape_site`. Async tests use an `asyncio.run` helper, because pytest-asyncio is not installed.
+- Checks: `uv run ruff format src tests`, `uv run ruff check src tests`, `uv run pytest`. The 90 tests are offline. They use the `make_chat` fixture (scripted LLM) and monkeypatch `pagifyx.workflow.service.scrape_site`. Async tests use an `asyncio.run` helper, because pytest-asyncio is not installed.
 - Real-browser check: there is no fixture site in the repo. Serve a folder with `python -m http.server 8765` and call `scrape_site("http://127.0.0.1:8765/")`.
 - Image validation uses python-docx `Image.from_blob` (`images.is_embeddable`). It checks headers only, so truncated images can still embed.
 - Font detection reads the Windows registry (`core/fonts.py`). On other platforms every site font falls back to Calibri.
