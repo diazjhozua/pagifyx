@@ -1,0 +1,26 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.template
+.claude/settings.local.json
+
+# Generated brochures, screenshots, and downloaded images
+/output/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# Editors and OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
