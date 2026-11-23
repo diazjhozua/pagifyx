@@ -2,8 +2,8 @@
 (function () {
   "use strict";
 
-  // Highlight the sidebar link for the section currently in view.
-  var links = Array.prototype.slice.call(document.querySelectorAll(".sidebar a[href^='#']"));
+  // Highlight the contents link for the section currently in view.
+  var links = Array.prototype.slice.call(document.querySelectorAll(".contents a[href^='#']"));
   var byId = {};
   links.forEach(function (link) {
     byId[link.getAttribute("href").slice(1)] = link;

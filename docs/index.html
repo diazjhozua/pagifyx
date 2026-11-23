@@ -9,28 +9,16 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="#start">pagifyx</a>
+    <a class="brand" href="index.html">pagifyx</a>
     <span class="tagline">Code structure guide</span>
+    <nav class="pages" aria-label="Guide pages">
+      <a href="index.html" aria-current="page">Code structure</a>
+      <a href="pipeline.html">How it works</a>
+      <a href="flow.html">End-to-end flow</a>
+    </nav>
   </header>
 
-  <div class="layout">
-    <nav class="sidebar" aria-label="Sections">
-      <ul>
-        <li><a href="#start">Start here</a></li>
-        <li><a href="#picture">The big picture</a></li>
-        <li><a href="#journey">The user journey</a></li>
-        <li><a href="pipeline.html">How it works (one page)</a></li>
-        <li><a href="flow.html">End-to-end flow (code level)</a></li>
-        <li><a href="#tree">Folder tree</a></li>
-        <li><a href="#modules">Module reference</a></li>
-        <li><a href="#ideas">Key ideas</a></li>
-        <li><a href="#tests">Tests</a></li>
-        <li><a href="#recipes">Common changes</a></li>
-        <li><a href="#gaps">Known gaps</a></li>
-      </ul>
-    </nav>
-
-    <main class="content">
+  <main class="article">
 
       <section id="start">
         <h1>pagifyx code structure</h1>
@@ -39,6 +27,22 @@
           site with a browser, asks an AI model to plan the brochure, lets the user revise the
           plan in a chat, and then writes a <code>.docx</code> file the user can edit in Word.
         </p>
+
+        <nav class="contents" aria-labelledby="contents-title">
+          <h2 id="contents-title">Contents</h2>
+          <ol>
+            <li><a href="#start">Start here</a></li>
+            <li><a href="#picture">The big picture</a></li>
+            <li><a href="#journey">The user journey</a></li>
+            <li><a href="#tree">Folder tree</a></li>
+            <li><a href="#modules">Module reference</a></li>
+            <li><a href="#ideas">Key ideas</a></li>
+            <li><a href="#tests">Tests</a></li>
+            <li><a href="#recipes">Common changes</a></li>
+            <li><a href="#gaps">Known gaps</a></li>
+          </ol>
+        </nav>
+
         <p>
           This guide explains how the code is organized. Read the first two sections for the
           shape of the system. Read the module reference when you need to change something.
@@ -51,22 +55,30 @@ uv run playwright install chromium
 # copy .env.template to .env, then set LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
 uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <p class="note">
-          The app will not start without the three <code>LLM_*</code> values in <code>.env</code>.
+          The app will not start without the three <code>LLM_*</code> values. Set them in
+          <code>.env</code> or in the environment. Environment variables take precedence over
+          <code>.env</code>. The optional <code>OUTPUT_DIR</code> sets where generated files go. It
+          defaults to <code>output</code>.
         </p>
       </section>
 
       <section id="picture">
         <h2>The big picture</h2>
         <p>
-          The code is layered. Each layer only talks to the layer directly below it. The web
-          layer knows about HTTP. The service layer knows about the workflow. The layers below
-          do one job each and know nothing about the web or the workflow.
+          The code is layered, and imports point downward. <code>core</code> imports only other
+          <code>core</code> modules. <code>reading</code>, <code>llm</code>, and <code>output</code>
+          import only from the layers below them. <code>workflow</code> imports <code>core</code>,
+          <code>reading</code>, <code>llm</code>, and <code>output</code>. The web layer knows about
+          HTTP. Its routes use <code>core</code> for types and fold helpers, and <code>llm</code>
+          and <code>reading</code> only for their error classes. <code>app.py</code> imports
+          <code>llm</code> to build the default client. No module below <code>workflow</code> imports <code>workflow</code>, and
+          no module below <code>web</code> imports <code>web</code>.
         </p>
 
         <div class="layers" role="img" aria-label="Five layers, top to bottom: browser, web routes, service workflow, collaborators, foundations">
           <div class="layer layer-browser">
             <strong>Browser</strong>
-            <span>Forms, redirects, the overview cards, the downloaded .docx</span>
+            <span>Forms, redirects, the proof sheet, the downloaded .docx</span>
           </div>
           <div class="layer layer-web">
             <strong>web/routes.py</strong>
@@ -84,6 +96,7 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
             <span class="cell">core/theme.py</span>
             <span class="cell">core/brand.py</span>
             <span class="cell">core/folds.py</span>
+            <span class="cell">core/grounding.py</span>
             <span class="cell">output/docx_builder.py</span>
             <span class="cell">workflow/session.py</span>
           </div>
@@ -105,45 +118,66 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
       <section id="journey">
         <h2>The user journey</h2>
         <p>
-          Every user action is one HTTP request. Each request maps to one service method. The
-          tables below show the call chain for each step. For a phase-by-phase diagram with the
-          function and line number for every step, see <a href="flow.html">the end-to-end flow</a>.
+          Each step is one HTTP POST that calls one service method. The pages are GET routes:
+          <code>GET /</code> (the start page), <code>GET /sessions/{id}</code> (the settings page),
+          <code>GET /sessions/{id}/overview</code> (the proof sheet),
+          <code>GET /sessions/{id}/download</code> (the .docx), and
+          <code>GET /sessions/{id}/files/{filename}</code> (an image or the logo from the session's
+          assets folder only). The lists below show the call chain for each step. For a
+          phase-by-phase diagram, see <a href="flow.html">the end-to-end flow</a>.
         </p>
 
         <h3>1. Read the website</h3>
-        <p><code>POST /sessions</code> with a URL, or <code>POST /sessions/{id}/retry</code>.</p>
+        <p><code>POST /sessions</code> with a URL, or <code>POST /sessions/{id}/retry</code> to read again.</p>
         <ol class="chain">
-          <li><code>web.create_session</code> creates a <code>Session</code> and calls <code>service.read_website</code>.</li>
-          <li><code>scraper.scrape_site</code> opens the homepage and up to 5 same-domain nav links in headless Chromium. It returns a <code>SiteSnapshot</code>. It checks robots.txt first.</li>
-          <li><code>assets.download_images</code> keeps the best images (see <code>images.select_images</code>). <code>assets.store_logo</code> saves the logo mark, or the og:image if there is no logo element.</li>
-          <li><code>theme.candidate_colours</code> and <code>theme.detect_font_family</code> read the computed styles collected by the scraper. The plan picks its colours from the candidates.</li>
-          <li><code>BrochureService._analyze</code> asks the model for a <code>SiteAnalysis</code> through <code>ChatClient.complete_json</code>.</li>
+          <li><code>web.create_session</code> creates a <code>Session</code> and calls <code>service.read_website</code>. The retry route calls the same method on the existing session.</li>
+          <li><code>scraper.scrape_site</code> checks robots.txt first. It then opens the homepage in headless Chromium, takes the logo screenshot, and follows up to 5 same-domain links from the nav, header, and footer. It returns a <code>SiteSnapshot</code>.</li>
+          <li><code>BrochureService._analyze</code> asks the model for a <code>SiteAnalysis</code>. The site text sent to the model is capped at 12,000 characters.</li>
+          <li><code>service._download_assets</code> downloads the best images (<code>images.select_images</code>, then <code>assets.download_images</code>). It stores the logo screenshot with <code>assets.store_logo</code>. When no usable screenshot is stored, it downloads the og:image instead.</li>
+          <li><code>read_website</code> computes the colour candidates (<code>theme.candidate_colours</code>) and the font (<code>theme.detect_font_family</code>) from the styles the scraper collected. <code>Session.commit_read</code> then stores everything, clears any plan from the previous read, and deletes the previous read's files. It never deletes an uploaded logo.</li>
         </ol>
-        <p class="note">Fallback: <code>POST /sessions/{id}/paste</code> analyzes text the user pasted when the site blocks the reader.</p>
+        <p class="note">
+          Images and the logo are downloaded only after the model succeeds. Each read writes its
+          files under a new prefix, so the previous read stays in place until the new one commits.
+        </p>
+        <p class="note">
+          Fallback: <code>POST /sessions/{id}/paste</code> analyzes text the user pasted when the
+          site blocks the reader. It makes one model call. The read has no images and no logo, and
+          the only colour candidate is the default <code>#1F4E79</code>. With no detected font, the
+          theme uses Calibri.
+        </p>
 
         <h3>2. Choose a fold and generate the overview</h3>
-        <p><code>POST /sessions/{id}/fold</code> with the fold, brand, and theme fields.</p>
+        <p><code>POST /sessions/{id}/fold</code> with the fold, brand, contact, and theme fields, and an optional logo file.</p>
         <ol class="chain">
-          <li><code>web.choose_fold</code> reads the fold (blank lets the model choose), saves the logo upload if there is one, and builds <code>BrandOverrides</code> (with contact details) and <code>ThemeOverrides</code> through the helpers in <code>workflow/service.py</code>.</li>
-          <li><code>service.choose_fold</code> takes the session lock and builds the plan request with <code>prompts.plan_request</code>.</li>
-          <li>The model reply is validated by <code>folds.check_plan</code> and <code>grounding.check_grounding</code>. The panel count must match the fold, and every number or email must appear in the website text or the form.</li>
-          <li>Only after success does the service store the fold, overrides, overview, and chat history. A failed attempt leaves the previous plan in place.</li>
+          <li><code>web.choose_fold</code> stores the typed values in <code>session.settings_form</code>, so the settings page can show them again after a failed step. It parses the fold (blank lets the model choose), builds <code>ThemeOverrides</code> and <code>BrandOverrides</code> (with contact details) through the <code>build_*_overrides</code> helpers in <code>workflow/service.py</code>, and reads the logo upload.</li>
+          <li><code>service.choose_fold</code> checks the logo upload before any model call. It must be 5 MB or smaller and a PNG or JPEG that Word can embed. Then it takes the session lock and builds the plan request with <code>prompts.plan_request</code>.</li>
+          <li>The model reply goes through the plan check in <code>service._plan_check</code>. The reply must use the chosen fold. It must pass <code>folds.check_plan</code>, which checks the panel count, exactly one Cover as the last outside panel, Contact at most once and only with contact details, a headline on every panel except Gallery, an image on every Gallery panel, and known images used at most once. Its primary and accent colours must come from the website's colour list. It must also pass <code>grounding.check_grounding</code>, so every number and email in the panel text must appear in the website text or the form.</li>
+          <li>Only after success does the service save the logo upload as <code>logo-upload-&lt;8 hex&gt;.&lt;ext&gt;</code>, delete the previous uploaded logo if the new one replaces it, and store the fold, overrides, overview, and chat history. A failed step writes no logo file, and the logo in use stays.</li>
         </ol>
 
         <h3>3. Revise in chat</h3>
         <p><code>POST /sessions/{id}/revise</code> with a change request.</p>
         <ol class="chain">
-          <li><code>service.revise</code> sends the full history plus the new request to the model.</li>
-          <li>On success it replaces the overview, appends the request to <code>revisions</code>, and clears the download link for any earlier <code>.docx</code>.</li>
+          <li><code>service.revise</code> sends the full chat history plus the request (<code>prompts.revision_request</code>) to the model. The reply goes through the same plan check, with the same fold.</li>
+          <li>On success it replaces the overview, appends the note text to <code>revisions</code>, adds the exchange to the history, and clears <code>brochure_path</code>. The earlier <code>.docx</code> is then no longer offered for download.</li>
         </ol>
 
         <h3>4. Approve and download</h3>
         <p><code>POST /sessions/{id}/approve</code>, then <code>GET /sessions/{id}/download</code>.</p>
         <ol class="chain">
-          <li><code>service.approve</code> calls <code>docx_builder.build_brochure</code> with the brand, the resolved theme, and the image files.</li>
-          <li>The builder splits the panels into two faces with <code>folds.face_panels</code>. It writes one landscape Letter section and one table per face.</li>
-          <li>The route serves <code>output/&lt;session&gt;/brochure.docx</code>.</li>
+          <li><code>service.approve</code> makes no model call. It resolves the theme with <code>theme.resolve_theme</code>, which applies the theme overrides first. It then calls <code>docx_builder.build_brochure</code> with the overview, the fold spec, the brand (name, tagline, and effective logo), the theme, and the image files.</li>
+          <li>The builder splits the panels into two faces with <code>folds.face_panels</code>. It writes one landscape Letter section per face, with one table per face.</li>
+          <li>The download route serves the file at <code>output/&lt;session&gt;/brochure.docx</code> by default.</li>
         </ol>
+
+        <h3>Model calls and retries</h3>
+        <ul>
+          <li>Read: one model call. A second call happens only when the reply does not parse or fails validation.</li>
+          <li>Plan and revise: one model call. A second call happens only when the reply does not parse, fails validation, or fails the plan check. The retry sends the rejected reply and the error text.</li>
+          <li>Approve: no model call.</li>
+          <li>A request error or an empty reply raises <code>LLMError</code> at once, with no retry. If the retry also fails, the step raises <code>LLMError</code>.</li>
+        </ul>
       </section>
 
       <section id="tree">
@@ -158,7 +192,7 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
 │   ├── __init__.py       version
 │   ├── __main__.py       `uv run pagifyx` starts the server
 │   ├── core/                shared rules and data; imports nothing above it
-│   │   ├── config.py        settings read from .env
+│   │   ├── config.py        settings read from .env and the environment
 │   │   ├── models.py        pydantic data shapes
 │   │   ├── folds.py         fold layouts and overview checks
 │   │   ├── theme.py         palette (rgb, oklch, oklab) and font detection; resolved theme
@@ -180,17 +214,19 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
 │   └── web/                 browser interface
 │       ├── app.py           create_app(): wires the parts together
 │       ├── routes.py        HTTP routes (thin)
-│       ├── templates/       Jinja2 pages: base, index, session, overview
-│       └── static/app.css   styles for the web app
+│       ├── templates/       Jinja2 pages: base, index, session, overview, _macros
+│       └── static/          app.css, and fonts/ (three woff2 files, two OFL licence texts)
 └── tests/                   offline tests, grouped like src/pagifyx
     ├── conftest.py          shared fixtures (scripted LLM, settings)
-    ├── core/                test_folds, test_theme, test_brand
+    ├── core/                test_folds, test_theme, test_brand, test_grounding
     ├── reading/             test_images, test_scraper
     ├── llm/                 test_llm
     ├── output/              test_docx_builder
+    ├── workflow/            test_read_commit
     └── web/                 test_web_flow</code></pre>
         <p class="note">
-          Generated files go to <code>output/</code>. It is created at runtime and is gitignored.
+          Generated files go to <code>output/</code> by default. Set <code>OUTPUT_DIR</code> to
+          change the folder. The default folder is created at runtime and is gitignored.
         </p>
       </section>
 
@@ -206,7 +242,7 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
             <tbody>
               <tr>
                 <th scope="row"><code>web/app.py</code></th>
-                <td>Builds the FastAPI app. Stores the shared parts (store, service, templates) on <code>app.state.deps</code>. Mounts static files and the router.</td>
+                <td>Builds the FastAPI app and its default <code>ChatClient</code> from settings. Stores the shared parts (store, service, templates) on <code>app.state.deps</code>. Mounts static files and the router.</td>
                 <td><code>create_app()</code></td>
               </tr>
               <tr>
@@ -221,17 +257,17 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
               </tr>
               <tr>
                 <th scope="row"><code>workflow/service.py</code></th>
-                <td>The workflow. Each method holds <code>session.lock</code>, computes new state in local variables, and commits only after the model call succeeds.</td>
-                <td><code>BrochureService</code>, <code>BrochureError</code>, <code>build_theme_overrides()</code></td>
+                <td>The workflow. Each step holds <code>session.lock</code>. The steps that call the model compute new state in local variables and commit only after the call succeeds.</td>
+                <td><code>BrochureService</code>, <code>BrochureError</code>, <code>build_brand_overrides()</code>, <code>build_theme_overrides()</code>, <code>check_logo_upload()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>workflow/session.py</code></th>
-                <td>All state for one brochure: URL, analysis, images, overrides, fold, overview, chat history, revisions, output path, pending error. The store is a dictionary in memory.</td>
-                <td><code>Session</code>, <code>SessionStore</code>, <code>clear_plan()</code>, <code>image_paths()</code></td>
+                <td>All state for one brochure: <code>id</code>, <code>url</code>, <code>directory</code>, <code>lock</code>, <code>analysis</code>, <code>images</code>, <code>logo_path</code>, <code>colour_candidates</code>, <code>detected_font</code>, <code>source_text</code>, <code>brand_overrides</code>, <code>theme_overrides</code>, <code>settings_form</code>, <code>fold</code>, <code>overview</code>, <code>history</code>, <code>revisions</code>, <code>brochure_path</code>, and <code>error</code>. The store is a dictionary in memory.</td>
+                <td><code>Session</code>, <code>SessionStore</code>, <code>commit_read()</code>, <code>clear_plan()</code>, <code>image_paths()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>llm/client.py</code></th>
-                <td>Wraps the OpenAI-compatible Chat Completions API. <code>complete_json()</code> asks for JSON, validates it with pydantic and an optional check, and retries once with the error text.</td>
+                <td>Wraps the OpenAI-compatible Chat Completions API. <code>complete_json()</code> asks for JSON, validates it with pydantic and an optional check, and retries once with the error text. Request errors and empty replies raise <code>LLMError</code> at once.</td>
                 <td><code>ChatClient</code>, <code>LLMError</code></td>
               </tr>
               <tr>
@@ -241,28 +277,28 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
               </tr>
               <tr>
                 <th scope="row"><code>reading/scraper.py</code></th>
-                <td>Reads the site with Playwright. Checks robots.txt, follows up to 5 same-domain links from nav, header, and footer, takes a logo screenshot, and collects colors, fonts, and image candidates. Writes no files.</td>
+                <td>Reads the site with Playwright. Checks robots.txt first, follows up to 5 same-domain links from the nav, header, and footer, takes a logo screenshot, and collects colours, fonts, and image candidates. Writes no files.</td>
                 <td><code>scrape_site()</code>, <code>SiteSnapshot</code>, <code>ScrapeError</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>reading/assets.py</code></th>
-                <td>Downloads images and stores logos. Only files python-docx can embed are kept.</td>
-                <td><code>download_images()</code>, <code>store_logo()</code>, <code>ImageAsset</code></td>
+                <td>Downloads images and stores the logo. Only PNG and JPEG files that python-docx can embed are kept.</td>
+                <td><code>download_images()</code>, <code>store_logo()</code>, <code>fetch_bytes()</code>, <code>ImageAsset</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>reading/images.py</code></th>
-                <td>Chooses which images suit a brochure: at least 400 px wide, at most 8, largest first. Drops SVG, favicon, and tracking images.</td>
+                <td>Chooses which images suit a brochure: at least 400 px wide, at most 8, largest by area first (width times height). Drops <code>data:</code> URLs, SVG files, and URLs containing favicon, pixel, tracking, beacon, or spacer.</td>
                 <td><code>select_images()</code>, <code>is_embeddable()</code>, <code>sniff_image_type()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/brand.py</code></th>
-                <td>Brand identity helpers: picks the logo element from candidates and holds the user's brand overrides (name, tagline, logo).</td>
+                <td>Brand identity helpers: picks the logo element from candidates and holds the user's brand overrides: name, tagline, logo, and contact details (phone, email, address).</td>
                 <td><code>choose_logo()</code>, <code>BrandOverrides</code>, <code>LogoHint</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/theme.py</code></th>
-                <td>The visual system: palette and font. Detects them from computed styles, applies overrides, and produces the <code>Theme</code> used by the builder.</td>
-                <td><code>Theme</code>, <code>Palette</code>, <code>ThemeOverrides</code>, <code>resolve_theme()</code>, <code>build_palette()</code>, <code>candidate_colours()</code></td>
+                <td>The visual system: palette and font. Turns the site's colours into candidates and its font into a detected family, applies overrides, and produces the <code>Theme</code> used by the builder.</td>
+                <td><code>Theme</code>, <code>Palette</code>, <code>ThemeOverrides</code>, <code>resolve_theme()</code>, <code>build_palette()</code>, <code>candidate_colours()</code>, <code>detect_font_family()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/fonts.py</code></th>
@@ -271,33 +307,33 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
               </tr>
               <tr>
                 <th scope="row"><code>core/folds.py</code></th>
-                <td>The fold layouts: how many panels each side has. The model chooses the fold; <code>check_plan()</code> checks a plan against it.</td>
+                <td>The fold layouts: how many panels each side has. The model chooses the fold; <code>check_plan()</code> checks a plan against it: the panel count, one Cover as the last outside panel, Contact rules, a headline on every panel except Gallery, an image on every Gallery panel, and image ids that must be known and used at most once.</td>
                 <td><code>FoldSpec</code>, <code>FOLD_SPECS</code>, <code>get_fold_spec()</code>, <code>check_plan()</code>, <code>face_panels()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/grounding.py</code></th>
-                <td>Checks that every number and email in a plan appears in the website text or the form. A failed check makes the model retry.</td>
+                <td>Checks that every number and email in a panel's headline or body appears in the website text or the form. A failed check makes the model retry.</td>
                 <td><code>check_grounding()</code>, <code>unsupported_details()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/models.py</code></th>
-                <td>The data shapes exchanged with the model and used by the builder. Null values from the model become empty strings or lists.</td>
-                <td><code>FoldType</code>, <code>PanelSection</code>, <code>Preset</code>, <code>Design</code>, <code>Panel</code>, <code>Overview</code>, <code>SiteAnalysis</code>, <code>LOGO_IMAGE_ID</code></td>
+                <td>The data shapes exchanged with the model and used by the builder. Null values from the model become empty text, empty lists, empty objects, or false, depending on the field.</td>
+                <td><code>FoldType</code>, <code>PanelSection</code>, <code>Preset</code>, <code>Design</code>, <code>Panel</code>, <code>Overview</code>, <code>SiteAnalysis</code>, <code>Contact</code>, <code>LOGO_IMAGE_ID</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>output/docx_builder.py</code></th>
-                <td>Writes the brochure. Landscape Letter, one section per face, one table per face with one column per panel. The cover is shaded with the primary color.</td>
+                <td>Writes the brochure: landscape Letter, one section per face, one table per face with one column per panel. The preset decides the fills and text colours (see Presets under Key ideas).</td>
                 <td><code>build_brochure()</code>, <code>BrochureBrand</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>core/config.py</code></th>
-                <td>Reads <code>.env</code> and the environment into a <code>Settings</code> object.</td>
+                <td>Reads <code>.env</code> and the environment into a <code>Settings</code> object: the three LLM values and the optional <code>OUTPUT_DIR</code>. Environment variables take precedence over <code>.env</code>.</td>
                 <td><code>Settings</code>, <code>get_settings()</code></td>
               </tr>
               <tr>
                 <th scope="row"><code>web/templates/</code> and <code>web/static/</code></th>
-                <td>Jinja2 pages (base, index, session, overview) and one stylesheet.</td>
-                <td><code>session.html</code>, <code>overview.html</code></td>
+                <td>Jinja2 pages (base, index, session, overview) and the <code>_macros.html</code> partial: the step bar (<code>step_line</code>), the proof-sheet faces (<code>sheet_face</code>), and the fold drawings (<code>mini_sheet</code>). The overview page is a proof sheet: one face per side, one box per panel, and a Generated tag on panels the model marked. <code>static/app.css</code> holds the styles. <code>static/fonts/</code> holds the three woff2 files (Newsreader and Hanken Grotesk) and their two OFL licence texts.</td>
+                <td><code>session.html</code>, <code>overview.html</code>, <code>_macros.html</code></td>
               </tr>
             </tbody>
           </table>
@@ -310,10 +346,46 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <h3>Theme and Brand are separate</h3>
         <p>
           <strong>Theme</strong> is the visual system: palette and font. It lives in
-          <code>core/theme.py</code>. <strong>Brand</strong> is the identity: name, tagline, and logo.
-          It lives in <code>core/brand.py</code> and <code>core/models.py</code>. The form, the overrides,
-          and the docx builder keep the two apart. The terms are listed in
-          <code>CLAUDE.md</code>.
+          <code>core/theme.py</code>. <strong>Brand</strong> is the identity: name, tagline, logo,
+          and contact details (phone, email, address). It lives in <code>core/brand.py</code> and
+          <code>core/models.py</code>. The form, the overrides, and the docx builder keep the two
+          apart. The terms are listed in <code>CLAUDE.md</code>.
+        </p>
+
+        <h3>Presets</h3>
+        <p>
+          The model picks one preset from the website's own look: <code>full-colour</code> for a
+          site with a strong brand colour, <code>night</code> for a dark site, and
+          <code>paper</code> for a light, neutral one. The table lists each preset, the label the
+          web interface shows, and what the .docx does with it.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Preset (core/models.py)</th><th scope="col">Label in the web UI (web/routes.py)</th><th scope="col">What the .docx shows</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>Preset.FULL_COLOUR</code>, <code>full-colour</code></th>
+                <td>Full colour</td>
+                <td>The cover and call to action have a solid primary fill, with text in paper or ink, whichever contrasts more. Other panels are paper, with ink body text and primary headlines.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>Preset.NIGHT</code>, <code>night</code></th>
+                <td>Night</td>
+                <td>The cover and call to action have a solid primary fill. Other panels are ink, with paper body text. Headlines use the accent colour when it reads on ink, and paper otherwise.</td>
+              </tr>
+              <tr>
+                <th scope="row"><code>Preset.PAPER</code>, <code>paper</code></th>
+                <td>Paper</td>
+                <td>Every panel is on paper. The cover and call to action have primary text and no fill. Each headline except the cover's has an accent rule under it. Body text is ink.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          The primary colour in the .docx can be darker than the website's colour. The palette
+          darkens it only until paper-coloured text reaches 4.5:1 contrast on it.
         </p>
 
         <h3>Folds have faces</h3>
@@ -327,19 +399,25 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
 
         <h3>A plan must fit its fold and its source</h3>
         <p>
-          The model returns one plan: a fold, a design, and the panels. <code>check_plan()</code>
-          rejects a wrong panel count, a cover in the wrong place, a Contact panel without contact
-          details, and unknown or repeated images. <code>check_grounding()</code> rejects any number
-          or email that is not in the website text or the form. The colours must come from the
-          website's own list. The model gets one retry with the error text.
+          The model returns one plan: a fold, a design, and the panels. The service checks the reply
+          against the chosen fold, <code>folds.check_plan()</code>, the website colour list, and
+          <code>grounding.check_grounding()</code>. <code>check_grounding()</code> rejects any number
+          or email in a panel's headline or body that is not in the website text or the form. The
+          primary and accent colours must come from the website's own list, and the accent may be
+          empty. A failed check makes the model retry once, with the error text.
         </p>
 
         <h3>Steps commit only on success</h3>
         <p>
-          Every service method that changes a session runs under <code>session.lock</code>. It
-          computes the new fold, overview, and history in local variables. It assigns them to the
-          session only after the model call succeeds. A failed call therefore never leaves a
-          mismatched plan, such as the old overview paired with a new fold.
+          Every service method that changes a session runs under <code>session.lock</code>. The
+          steps that call the model compute the new fold, overview, and history in local variables.
+          They assign them to the session only after the model call succeeds. A failed call therefore
+          never leaves a mismatched plan, such as the old overview paired with a new fold.
+        </p>
+        <p>
+          The settings form is the one exception. <code>web.choose_fold</code> writes
+          <code>session.settings_form</code> before the step, so the settings page can show what the
+          user typed after a failure.
         </p>
 
         <h3>Errors are shown, not raised</h3>
@@ -353,16 +431,18 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <h3>The scraper only reads</h3>
         <p>
           <code>scrape_site()</code> returns a <code>SiteSnapshot</code>. That is raw page text,
-          colors, fonts, image candidates, and a logo screenshot as bytes. Saving files is
-          <code>reading/assets.py</code>'s job. This keeps the browser code easy to test and replace.
+          colours, fonts, image candidates, and a logo screenshot as bytes. It writes no files.
+          Saving files is the job of <code>reading/assets.py</code>, which
+          <code>_download_assets</code> in <code>workflow/service.py</code> calls. That function also
+          handles the og:image fallback. This keeps the browser code easy to test and replace.
         </p>
 
         <h3>Fallbacks</h3>
         <ul>
-          <li>Blocked site: the user can paste the site's text instead.</li>
-          <li>No logo element: the og:image is used.</li>
+          <li>Blocked site: the user can paste the site's text instead. The pasted path has no images, no logo, the default colour <code>#1F4E79</code> as its only candidate, and Calibri unless the user sets a font.</li>
+          <li>No logo captured: the og:image is downloaded and used if it is a PNG or JPEG.</li>
           <li>Site font not installed (or not on Windows): Calibri is used.</li>
-          <li>Model returns null: treated as an empty string or list.</li>
+          <li>Model returns null: treated as empty text, an empty list, an empty object, or false, depending on the field.</li>
         </ul>
       </section>
 
@@ -371,8 +451,8 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <p>
           The tests run offline. The model is replaced by a scripted fake (the
           <code>make_chat</code> fixture in <code>conftest.py</code>). The browser is replaced by
-          a monkeypatched <code>scrape_site</code>. Run them with
-          <code>uv run pytest</code>.
+          a monkeypatched <code>scrape_site</code>. Run them with <code>uv run pytest</code>. The
+          suite has 90 tests.
         </p>
         <div class="table-wrap">
           <table>
@@ -380,15 +460,16 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
               <tr><th scope="col">File</th><th scope="col">What it covers</th></tr>
             </thead>
             <tbody>
-              <tr><th scope="row"><code>core/test_folds.py</code></th><td>Panel counts, faces, overview checks, and presentation order.</td></tr>
-              <tr><th scope="row"><code>core/test_theme.py</code></th><td>Color parsing (rgb, oklch, oklab), palette and font detection, override precedence.</td></tr>
+              <tr><th scope="row"><code>core/test_folds.py</code></th><td>Panel counts, faces, plan checks, and presentation order.</td></tr>
+              <tr><th scope="row"><code>core/test_theme.py</code></th><td>Colour parsing (rgb, oklch, oklab), palette and font detection, override precedence.</td></tr>
               <tr><th scope="row"><code>core/test_brand.py</code></th><td>Logo choice from candidates.</td></tr>
               <tr><th scope="row"><code>core/test_grounding.py</code></th><td>Numbers and emails in a plan must appear in the source.</td></tr>
               <tr><th scope="row"><code>reading/test_images.py</code></th><td>Image selection and embeddability checks.</td></tr>
               <tr><th scope="row"><code>reading/test_scraper.py</code></th><td>URL normalization and nav link selection.</td></tr>
               <tr><th scope="row"><code>output/test_docx_builder.py</code></th><td>Section orientation, panel placement, the three presets, gallery panels, cover message.</td></tr>
-              <tr><th scope="row"><code>llm/test_llm.py</code></th><td>JSON parsing, code-fence stripping, the single retry.</td></tr>
-              <tr><th scope="row"><code>web/test_web_flow.py</code></th><td>The full HTTP flow with a stubbed scraper. Failed steps keep the previous state. A revision clears the old download.</td></tr>
+              <tr><th scope="row"><code>llm/test_llm.py</code></th><td>JSON parsing, code-fence stripping, the single retry, and the retry after a failed check.</td></tr>
+              <tr><th scope="row"><code>workflow/test_read_commit.py</code></th><td>A failed read or paste keeps the previous plan. A successful read replaces it, and deletes the previous read's files but not an uploaded logo.</td></tr>
+              <tr><th scope="row"><code>web/test_web_flow.py</code></th><td>The HTTP flow with a stubbed scraper. Failed steps keep the previous state, and a failed step writes no logo file. A revision clears the old download. A bad logo is refused before the model call.</td></tr>
             </tbody>
           </table>
         </div>
@@ -406,27 +487,35 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
 
         <h3>Add a fold</h3>
         <ol>
-          <li>Add a member to <code>FoldType</code> in <code>core/folds.py</code>.</li>
-          <li>Add a value to <code>FoldType</code>, a <code>FoldSpec</code> with its <code>panels_per_side</code>, and list it in the fold rule of <code>plan_request</code>.</li>
-          <li>Add a test in <code>core/test_folds.py</code>. The builder reads the plan and the spec, so the only other files that change are the prompt and the fold list.</li>
+          <li>Add the member to <code>FoldType</code> in <code>core/models.py</code>.</li>
+          <li>Add a <code>FoldSpec</code> with its label, description, and <code>panels_per_side</code> to <code>FOLD_SPECS</code> in <code>core/folds.py</code>. The settings page calls <code>get_fold_spec()</code> for every <code>FoldType</code>, so a member without a spec breaks that page.</li>
+          <li>In <code>llm/prompts.py</code>, add the panel count to <code>_PANEL_COUNTS</code>. It repeats the count from <code>FOLD_SPECS</code>, and a fold the user picks raises <code>KeyError</code> without it. Also add the fold to the fold rule in <code>plan_request</code>, which names the folds the model may choose.</li>
+          <li>Add tests to <code>tests/core/test_folds.py</code>. The builder takes the panel split from the <code>FoldSpec</code>, so <code>output/docx_builder.py</code> needs no change unless the new fold prints differently.</li>
         </ol>
 
         <h3>Add or change a panel section</h3>
         <ol>
           <li>Add the member to <code>PanelSection</code> in <code>core/models.py</code>.</li>
-          <li>Place it on a face in each fold that uses it. The prompt and the builder pick it up from there.</li>
-          <li>Update the tests that list sections, and the copy rules in <code>llm/prompts.py</code>, if the new section needs guidance.</li>
+          <li>There is no per-fold map of sections. The model chooses the sections for each panel. Add the section to the list in <code>plan_request</code> (<code>llm/prompts.py</code>), and say there what the section needs.</li>
+          <li>Add any special handling the section needs. <code>check_plan</code> in <code>core/folds.py</code> enforces the Cover slot, the Contact rules, and the Gallery image. Every other panel needs a headline. <code>output/docx_builder.py</code> special-cases Cover and Gallery. Cover and Call to action take the emphasis colours through <code>_EMPHASISED</code>. A new section otherwise gets the default look.</li>
+          <li>Update the tests that use sections, in <code>tests/core/test_folds.py</code> and <code>tests/output/test_docx_builder.py</code>. Update the copy rules in <code>llm/prompts.py</code> if the section needs guidance.</li>
         </ol>
 
         <h3>Add a brand or theme override</h3>
         <ol>
           <li>Add the field to <code>BrandOverrides</code> (core/brand.py) or <code>ThemeOverrides</code> (core/theme.py).</li>
           <li>Add the form field to <code>web/templates/session.html</code>.</li>
-          <li>Read it in <code>web.choose_fold</code>, validate it in the <code>build_*_overrides</code> helpers in <code>workflow/service.py</code>, and apply it where the value is used (<code>service.approve</code> or <code>theme.resolve_theme</code>).</li>
+          <li>Add a Form parameter to <code>choose_fold</code> in <code>web/routes.py</code>, and add the field to the <code>settings_form</code> dict in the same function. The settings page reads that dict back after a failed step, so a missing key loses what the user typed.</li>
+          <li>Pass the value to the <code>build_brand_overrides()</code> or <code>build_theme_overrides()</code> helper in <code>workflow/service.py</code>, and validate it there.</li>
+          <li>Apply it where the value is used. Brand name and tagline go through <code>brand_text()</code>, which the plan and <code>service.approve</code> both use. Contact details go through <code>_with_overrides()</code> and <code>_sources()</code>. Theme values go through <code>theme.resolve_theme</code>.</li>
         </ol>
 
         <h3>Change what the model is asked to do</h3>
-        <p>Edit the prompts in <code>llm/prompts.py</code>. Keep the JSON shape in sync with <code>core/models.py</code>, because pydantic rejects anything else and the model gets one retry.</p>
+        <p>
+          Edit the prompts in <code>llm/prompts.py</code>. Keep the JSON shape in sync with
+          <code>core/models.py</code>. Pydantic rejects any other shape, and the client retries once
+          with the error text.
+        </p>
       </section>
 
       <section id="gaps">
@@ -434,18 +523,19 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <ul>
           <li>The Z-fold <code>.docx</code> is identical to the tri-fold. The "panels fold opposite ways" instruction is not printed.</li>
           <li>Inside faces look sparse when the site has little copy or few images. The lower half of a panel stays empty.</li>
-          <li>The <code>generated</code> flag is the model's own judgment. Code checks numbers and emails only, not invented claims.</li>
+          <li>The <code>generated</code> flag is the model's own judgment. Code checks numbers and emails only, not invented claims. In practice the model marks almost every panel as generated.</li>
           <li>Sessions live in memory and are lost when the server restarts.</li>
           <li>Image checks read file headers only. A truncated image can still embed.</li>
           <li>Font detection only works on Windows. Elsewhere every site font falls back to Calibri.</li>
+          <li>Logo capture only looks at images and SVGs in the header or nav, images and SVGs inside an element whose class contains "logo", and images whose alt text contains "logo". It considers the first six matches. Other sites fall back to the og:image.</li>
+          <li>A dark logo on a dark cover has little contrast.</li>
         </ul>
       </section>
 
       <footer class="foot">
         Static guide for the pagifyx code. No build step: open <code>index.html</code> or serve this folder.
       </footer>
-    </main>
-  </div>
+  </main>
 
   <script src="script.js"></script>
 </body>

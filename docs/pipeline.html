@@ -11,254 +11,272 @@
 <body>
   <header class="top">
     <a class="brand" href="index.html">pagifyx</a>
-    <span class="tagline">How it works, on one page</span>
+    <span class="tagline">How it works</span>
+    <nav class="pages" aria-label="Guide pages">
+      <a href="index.html">Code structure</a>
+      <a href="pipeline.html" aria-current="page">How it works</a>
+      <a href="flow.html">End-to-end flow</a>
+    </nav>
   </header>
 
-  <div class="layout">
-    <nav class="sidebar" aria-label="Sections">
-      <ul>
+  <main class="article">
+    <h1>How pagifyx works</h1>
+    <p class="lede">
+      pagifyx reads a company website, asks an AI model to plan a brochure, lets you change
+      the plan in chat, and then writes a Word file. The model is called in three places:
+      to read the site, to plan the brochure, and for each change you request. All
+      other work is ordinary code.
+    </p>
+
+    <nav class="contents" aria-labelledby="contents-title">
+      <h2 id="contents-title">Contents</h2>
+      <ol>
         <li><a href="#big-picture">The parts</a></li>
         <li><a href="#steps">The steps</a></li>
         <li><a href="#ai">Where AI is used</a></li>
         <li><a href="#saved">What gets saved</a></li>
         <li><a href="#fails">When a step fails</a></li>
         <li><a href="#files">Which file to open</a></li>
-        <li><a href="flow.html">Line-level flow</a></li>
-        <li><a href="index.html">Back to the guide</a></li>
-      </ul>
+      </ol>
     </nav>
 
-    <main class="content">
+    <section id="big-picture">
+      <h2>The parts</h2>
 
-      <section id="big-picture">
-        <h1>How pagifyx works</h1>
-        <p class="lede">
-          pagifyx reads a company website, asks an AI model to plan a brochure, lets you change
-          the plan in chat, and then writes a Word file. The model is called in three places:
-          to read the site, to plan the brochure, and for each change you request. All
-          other work is ordinary code.
-        </p>
-
-        <div class="map">
-          <div class="map-row top">
-            <div class="box you"><strong>You</strong><small>your browser</small></div>
-            <div class="map-glyph">→</div>
-            <div class="box flow"><strong>Web routes</strong><small>web/routes.py</small></div>
-            <div class="map-glyph">→</div>
-            <div class="box flow"><strong>Workflow</strong><small>workflow/service.py</small></div>
-          </div>
-
-          <div class="map-glyph down">↓ the workflow calls these groups</div>
-
-          <div class="map-row four">
-            <div class="box code"><strong>Reading</strong><small>reading/ scraper, images, assets</small></div>
-            <div class="box ai"><strong>AI model</strong><small>llm/ client and prompts</small></div>
-            <div class="box code"><strong>Plan and look</strong><small>core/ folds, theme, brand</small></div>
-            <div class="box code"><strong>Word writer</strong><small>output/ docx_builder</small></div>
-          </div>
-
-          <div class="map-row four">
-            <div class="map-glyph">↕</div>
-            <div class="map-glyph">↕</div>
-            <div></div>
-            <div class="map-glyph">↓</div>
-          </div>
-
-          <div class="map-row four">
-            <div class="box out"><strong>Company website</strong><small>read by headless Chromium</small></div>
-            <div class="box out"><strong>Model endpoint</strong><small>any OpenAI-compatible API</small></div>
-            <div></div>
-            <div class="box out"><strong>brochure.docx</strong><small>saved in output/</small></div>
-          </div>
-
-          <div class="box state map-wide">
-            <strong>Session</strong>
-            <small>One per brochure, kept in memory. Each step takes its lock. The session holds every result between steps.</small>
-          </div>
+      <div class="map">
+        <div class="map-row top">
+          <div class="box you"><strong>You</strong><small>your browser</small></div>
+          <div class="map-glyph">→</div>
+          <div class="box flow"><strong>Web routes</strong><small>web/routes.py</small></div>
+          <div class="map-glyph">→</div>
+          <div class="box flow"><strong>Workflow</strong><small>workflow/service.py</small></div>
         </div>
 
-        <div class="key" aria-label="Colour key">
-          <span><i class="chip chip-flow"></i>Workflow</span>
-          <span><i class="chip chip-code"></i>Code</span>
-          <span><i class="chip chip-ai"></i>Calls the AI model</span>
-          <span><i class="chip chip-out"></i>Outside the app</span>
+        <div class="map-glyph down">↓ the workflow calls these groups</div>
+
+        <div class="map-row four">
+          <div class="box code"><strong>Reading</strong><small>reading/ scraper, images, assets</small></div>
+          <div class="box ai"><strong>AI model</strong><small>llm/ client and prompts</small></div>
+          <div class="box code"><strong>Plan and look</strong><small>core/ folds, theme, brand</small></div>
+          <div class="box code"><strong>Word writer</strong><small>output/ docx_builder</small></div>
         </div>
-      </section>
 
-      <section id="steps">
-        <h1>The steps</h1>
-        <p class="lede">
-          Step 0 runs once when the app starts. Steps 1 to 4 run in order, from the browser. Each
-          step is one request and ends with a redirect. Each track below reads left to right.
-        </p>
-
-        <article class="step" id="step-0">
-          <header class="step-head"><span class="step-no">0</span><h2>Start the app (once)</h2></header>
-          <p class="when">Starts when: you run <code>uv run pagifyx</code>.</p>
-          <ol class="track">
-            <li class="code"><b>Start the server</b><small>__main__.main, uvicorn on 127.0.0.1:8000</small></li>
-            <li class="code"><b>Build the app</b><small>web/app.py create_app</small></li>
-            <li class="code"><b>Read settings</b><small>core/config.py, from .env</small></li>
-            <li class="ai"><b>Create the model client</b><small>llm/client.py ChatClient</small></li>
-            <li class="state"><b>Create the session store</b><small>workflow/session.py, output/ folder</small></li>
-          </ol>
-          <p class="result"><strong>Ends with:</strong> the home page, where you paste a website URL.</p>
-        </article>
-
-        <article class="step" id="step-1">
-          <header class="step-head"><span class="step-no">1</span><h2>Read the website</h2></header>
-          <p class="when">Starts when: you submit a URL. Route: <code>POST /sessions</code>.</p>
-          <ol class="track">
-            <li class="code"><b>Check robots.txt</b><small>reading/scraper.py _load_robots</small></li>
-            <li class="code"><b>Open the homepage</b><small>_read_homepage, headless Chromium</small></li>
-            <li class="code"><b>Follow up to 5 links</b><small>_crawl_nav, same site only</small></li>
-            <li class="code"><b>Collect the page facts</b><small>text, colours, fonts, images, logo candidates</small></li>
-            <li class="code"><b>Capture the logo mark</b><small>_capture_logo, transparent background</small></li>
-            <li class="ai"><b>Ask the model to read the text</b><small>workflow/service.py _analyze, SiteAnalysis</small></li>
-            <li class="code"><b>Download images and logo</b><small>_download_assets, new file prefix</small></li>
-            <li class="code"><b>Collect colours and font</b><small>core/theme.py candidate_colours</small></li>
-            <li class="state"><b>Save the read</b><small>session.commit_read: old read files removed</small></li>
-          </ol>
-          <p class="result"><strong>Ends with:</strong> brand name, tagline, tone, and site facts saved. Images and logo are on disk.</p>
-        </article>
-
-        <article class="step" id="step-2">
-          <header class="step-head"><span class="step-no">2</span><h2>Plan the brochure</h2></header>
-          <p class="when">Starts when: you submit the form. The fold is optional: blank lets the model choose. Route: <code>POST /sessions/{id}/fold</code>.</p>
-          <ol class="track">
-            <li class="code"><b>Read the form</b><small>web/routes.py choose_fold: fold, brand, contact, colour, font, logo</small></li>
-            <li class="code"><b>Build the plan request</b><small>llm/prompts.py plan_request: analysis, presets, website colours, panels</small></li>
-            <li class="ai"><b>Ask the model for a plan</b><small>workflow/service.py _ask, Overview: fold, design, panels</small></li>
-            <li class="code"><b>Check the plan</b><small>core/folds.py check_plan, core/grounding.py check_grounding, colours from the site; one retry</small></li>
-            <li class="state"><b>Save the plan and history</b><small>session.overview, session.fold, session.history</small></li>
-          </ol>
-          <p class="result"><strong>Ends with:</strong> the plan page: the fold, the style, and the panels in print order. Generated panels are marked.</p>
-        </article>
-
-        <article class="step" id="step-3">
-          <header class="step-head"><span class="step-no">3</span><h2>Revise (repeat as often as you like)</h2></header>
-          <p class="when">Starts when: you send a change request. Route: <code>POST /sessions/{id}/revise</code>.</p>
-          <ol class="track">
-            <li class="code"><b>Take your request</b><small>web/routes.py revise, from the chat box</small></li>
-            <li class="code"><b>Build the request</b><small>llm/prompts.py revision_request, with the history</small></li>
-            <li class="ai"><b>Ask the model to revise</b><small>workflow/service.py revise, then _ask</small></li>
-            <li class="code"><b>Check the reply</b><small>core/folds.py check_plan and core/grounding.py check_grounding; one retry</small></li>
-            <li class="state"><b>Replace the overview</b><small>session.overview, revisions, history</small></li>
-            <li class="state"><b>Clear the old .docx</b><small>session.brochure_path is reset</small></li>
-          </ol>
-          <p class="result"><strong>Ends with:</strong> the updated overview. Any earlier brochure must be built again before download.</p>
-        </article>
-
-        <article class="step" id="step-4">
-          <header class="step-head"><span class="step-no">4</span><h2>Approve and build the Word file</h2></header>
-          <p class="when">Starts when: you approve. Routes: <code>POST /sessions/{id}/approve</code>, then <code>GET /sessions/{id}/download</code>.</p>
-          <ol class="track">
-            <li class="code"><b>Resolve the brand text</b><small>workflow/service.py brand_text, your text first</small></li>
-            <li class="code"><b>Resolve the theme</b><small>core/theme.py resolve_theme, your primary colour and font first</small></li>
-            <li class="code"><b>Build the Word file</b><small>output/docx_builder.py build_brochure: preset, landscape, one table per face</small></li>
-            <li class="state"><b>Save the path</b><small>session.brochure_path, in output/&lt;id&gt;/</small></li>
-            <li class="code"><b>Download</b><small>web/routes.py download, returns brochure.docx</small></li>
-          </ol>
-          <p class="result"><strong>Ends with:</strong> brochure.docx. This step makes no model call.</p>
-        </article>
-      </section>
-
-      <section id="ai">
-        <h1>Where AI is used</h1>
-        <p class="lede">The model does three jobs. Everything else in the pipeline is code.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Step</th><th>Model calls</th><th>The model does</th><th>Code does instead</th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">1 Read the website</th><td>1</td><td>Turns the site text into brand name, tagline, tone, and facts.</td><td>Browsing, robots.txt, colours, fonts, images, logo.</td></tr>
-              <tr><th scope="row">2 Plan the brochure</th><td>1</td><td>Chooses the fold, the style, and the colours, and writes the panels.</td><td>Checks the plan: fold, cover, contact rule, images, colours, and numbers.</td></tr>
-              <tr><th scope="row">3 Revise</th><td>1 per request</td><td>Rewrites the plan from your request and the chat history.</td><td>Checks the reply again.</td></tr>
-              <tr><th scope="row">4 Approve</th><td>0</td><td>Nothing.</td><td>Builds the .docx from the saved plan.</td></tr>
-            </tbody>
-          </table>
+        <div class="map-row four">
+          <div class="map-glyph">↕</div>
+          <div class="map-glyph">↕</div>
+          <div></div>
+          <div class="map-glyph">↓</div>
         </div>
-        <p class="note">
-          Each model call retries once when the reply is not valid JSON or fails the fold check.
-          So one step makes at most 2 requests. With no revisions, the normal total is 2 calls, and
-          the worst case is 4.
-        </p>
-      </section>
 
-      <section id="saved">
-        <h1>What gets saved</h1>
-        <p class="lede">Everything lives on the session in memory. Only the Word file and the image files are written to disk.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Stored on the session</th><th>Set by</th><th>Used by</th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row"><code>analysis</code>, <code>images</code>, <code>logo_path</code>, <code>colour_candidates</code>, <code>detected_font</code>, <code>source_text</code></th><td>Step 1</td><td>Steps 2 and 4</td></tr>
-              <tr><th scope="row"><code>brand_overrides</code>, <code>theme_overrides</code>, <code>fold</code></th><td>Step 2</td><td>Steps 3 and 4</td></tr>
-              <tr><th scope="row"><code>overview</code>, <code>history</code></th><td>Steps 2 and 3</td><td>Overview page, steps 3 and 4</td></tr>
-              <tr><th scope="row"><code>revisions</code></th><td>Step 2 resets it, step 3 appends</td><td>Overview page</td></tr>
-              <tr><th scope="row"><code>brochure_path</code></th><td>Step 4 sets it, step 3 clears it</td><td>Download</td></tr>
-            </tbody>
-          </table>
+        <div class="map-row four">
+          <div class="box out"><strong>Company website</strong><small>read by headless Chromium</small></div>
+          <div class="box out"><strong>Model endpoint</strong><small>any OpenAI-compatible API</small></div>
+          <div></div>
+          <div class="box out"><strong>brochure.docx</strong><small>saved in output/</small></div>
         </div>
-        <p class="note">
-          Files: the logo and images go to the session's assets folder, and the Word file goes to
-          <code>output/&lt;id&gt;/</code>. A restart clears the sessions, but the files stay on disk.
-        </p>
-      </section>
 
-      <section id="fails">
-        <h1>When a step fails</h1>
-        <p class="lede">
-          Every step runs through one helper. It catches the three expected error types and stores
-          the message on the session. You see the message at the top of the next page.
-        </p>
-        <ul>
-          <li><strong>Reading errors</strong> (site blocked, robots.txt disallows it, too little text): use the paste-text fallback.</li>
-          <li><strong>Model errors</strong> (endpoint unreachable, or the reply is still invalid after the retry).</li>
-          <li><strong>Input errors</strong> (no URL or text, no overview to revise or approve).</li>
-        </ul>
-        <div class="rule">
-          <strong>Failed steps keep the old plan.</strong> Every step asks the model first and saves
-          its results only after the model succeeds. Step 1 downloads its files under a new name
-          prefix, so older files are not overwritten. The previous read's files are deleted only
-          when the new read is saved.
+        <div class="box state map-wide">
+          <strong>Session</strong>
+          <small>One per brochure, kept in memory. Each step takes its lock. The session holds every result between steps.</small>
         </div>
-      </section>
+      </div>
 
-      <section id="files">
-        <h1>Which file to open</h1>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>If you want to change</th><th>Open</th></tr>
-            </thead>
-            <tbody>
-              <tr><th scope="row">Startup, server, or settings</th><td><code>__main__.py</code>, <code>web/app.py</code>, <code>core/config.py</code></td></tr>
-              <tr><th scope="row">A page, a form field, or a route</th><td><code>web/routes.py</code>, <code>web/templates/</code></td></tr>
-              <tr><th scope="row">How the site is read</th><td><code>reading/scraper.py</code></td></tr>
-              <tr><th scope="row">Which images are kept</th><td><code>reading/images.py</code>, <code>reading/assets.py</code></td></tr>
-              <tr><th scope="row">Colour or font detection</th><td><code>core/theme.py</code></td></tr>
-              <tr><th scope="row">The fold layouts</th><td><code>core/folds.py</code></td></tr>
-              <tr><th scope="row">Number and email checks</th><td><code>core/grounding.py</code></td></tr>
-              <tr><th scope="row">The brand or logo choice</th><td><code>core/brand.py</code></td></tr>
-              <tr><th scope="row">The AI prompts</th><td><code>llm/prompts.py</code></td></tr>
-              <tr><th scope="row">How model replies are validated</th><td><code>llm/client.py</code></td></tr>
-              <tr><th scope="row">The Word layout</th><td><code>output/docx_builder.py</code></td></tr>
-              <tr><th scope="row">Step order and the lock</th><td><code>workflow/service.py</code>, <code>workflow/session.py</code></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="foot">
-          For line numbers on every step, see <a href="flow.html">the line-level flow</a>. For the
-          module reference and tests, see <a href="index.html">the guide</a>.
-        </p>
-      </section>
+      <div class="key" aria-label="Colour key">
+        <span><i class="chip chip-flow"></i>Workflow</span>
+        <span><i class="chip chip-code"></i>Code</span>
+        <span><i class="chip chip-ai"></i>Calls the AI model</span>
+        <span><i class="chip chip-out"></i>Outside the app</span>
+      </div>
+    </section>
 
-    </main>
-  </div>
+    <section id="steps">
+      <h2>The steps</h2>
+      <p class="lede">
+        Step 0 runs once when the app starts. Steps 1 to 4 run in order, from the browser. Each
+        step is one request. The routes for steps 1 to 4 redirect to a page that shows the result.
+        The download route returns brochure.docx itself, or redirects to the overview when no file
+        has been built. Each track below reads left to right.
+      </p>
+
+      <article class="step" id="step-0">
+        <header class="step-head"><span class="step-no">0</span><h3>Start the app (once)</h3></header>
+        <p class="when">Starts when: you run <code>uv run pagifyx</code>.</p>
+        <ol class="track">
+          <li class="code"><b>Start the server</b><small>__main__.main, uvicorn on 127.0.0.1:8000</small></li>
+          <li class="code"><b>Build the app</b><small>web/app.py create_app</small></li>
+          <li class="code"><b>Read settings</b><small>core/config.py, from .env</small></li>
+          <li class="ai"><b>Create the model client</b><small>llm/client.py ChatClient.from_settings</small></li>
+          <li class="state"><b>Create the session store</b><small>workflow/session.py SessionStore, files under output/</small></li>
+        </ol>
+        <p class="result"><strong>Ends with:</strong> the home page, where you paste a website URL.</p>
+      </article>
+
+      <article class="step" id="step-1">
+        <header class="step-head"><span class="step-no">1</span><h3>Read the website</h3></header>
+        <p class="when">Starts when: you submit a URL. Route: <code>POST /sessions</code>. The retry route, <code>POST /sessions/{id}/retry</code>, runs the same read.</p>
+        <ol class="track">
+          <li class="code"><b>Check robots.txt</b><small>reading/scraper.py scrape_site and _load_robots. A 4xx reply means no restriction. A 5xx reply or no connection stops the read.</small></li>
+          <li class="code"><b>Read the homepage</b><small>_read_homepage, headless Chromium. Collects text, colours, fonts, images, and logo candidates. Needs at least 200 characters of text.</small></li>
+          <li class="code"><b>Capture the logo mark</b><small>_capture_logo, transparent background</small></li>
+          <li class="code"><b>Follow up to 5 links</b><small>_crawl_nav: same-site links from the homepage nav, header, and footer, each checked against robots.txt. A page that fails is skipped.</small></li>
+          <li class="ai"><b>Ask the model to read the text</b><small>BrochureService._analyze, SiteAnalysis. Text is capped at 12,000 characters.</small></li>
+          <li class="code"><b>Download images and logo</b><small>_download_assets, under a new read-&lt;id&gt;- file prefix. Uses og:image when no usable logo mark was captured.</small></li>
+          <li class="code"><b>Collect colours and font</b><small>core/theme.py candidate_colours, detect_font_family</small></li>
+          <li class="state"><b>Save the read</b><small>session.commit_read clears the plan and deletes the previous read's files. An uploaded logo is kept.</small></li>
+        </ol>
+        <p class="result"><strong>Ends with:</strong> brand name, tagline, tone, and site facts saved. Images and logo are on disk.</p>
+      </article>
+
+      <article class="step" id="step-2">
+        <header class="step-head"><span class="step-no">2</span><h3>Plan the brochure</h3></header>
+        <p class="when">Starts when: you submit the form. The fold is optional: blank lets the model choose. Route: <code>POST /sessions/{id}/fold</code>.</p>
+        <ol class="track">
+          <li class="code"><b>Read the form</b><small>web/routes.py choose_fold: fold, brand, contact, colour, font, logo. The values are kept as settings_form.</small></li>
+          <li class="code"><b>Check the logo upload</b><small>workflow/service.py check_logo_upload, before any model call: 5 MB or smaller, PNG or JPEG that Word can embed</small></li>
+          <li class="code"><b>Build the plan request</b><small>llm/prompts.py plan_request: analysis, images, presets, website colours, panels</small></li>
+          <li class="ai"><b>Ask the model for a plan</b><small>workflow/service.py _ask, parsed as Overview: fold, design, panels</small></li>
+          <li class="code"><b>Check the plan</b><small>The chosen fold, core/folds.py check_plan, colours from the website list, core/grounding.py check_grounding. One retry if it fails.</small></li>
+          <li class="state"><b>Save the logo upload</b><small>Only when a logo was uploaded. Written as logo-upload-&lt;8 hex&gt;.png or .jpeg. The logo it replaces is deleted.</small></li>
+          <li class="state"><b>Save the plan</b><small>session.fold, overview, history, brand and theme overrides. Revisions and brochure_path are reset.</small></li>
+        </ol>
+        <p class="result"><strong>Ends with:</strong> the plan page: the fold, the style, and the panels in print order. Generated panels are marked. On failure you return to the form with the message.</p>
+      </article>
+
+      <article class="step" id="step-3">
+        <header class="step-head"><span class="step-no">3</span><h3>Revise (repeat as often as you like)</h3></header>
+        <p class="when">Starts when: you send a change request. Route: <code>POST /sessions/{id}/revise</code>.</p>
+        <ol class="track">
+          <li class="code"><b>Take your request</b><small>web/routes.py revise, from the chat box. A blank request is refused.</small></li>
+          <li class="code"><b>Build the request</b><small>llm/prompts.py revision_request: the change, the fixed fold, and the panel count. The chat history is sent before it.</small></li>
+          <li class="ai"><b>Ask the model to revise</b><small>workflow/service.py revise, then _ask</small></li>
+          <li class="code"><b>Check the reply</b><small>The same checks as step 2, with the fold fixed. One retry if it fails.</small></li>
+          <li class="state"><b>Replace the overview</b><small>session.overview, revisions (the note is added), history (the request and reply are added)</small></li>
+          <li class="state"><b>Clear the old .docx</b><small>session.brochure_path is reset</small></li>
+        </ol>
+        <p class="result"><strong>Ends with:</strong> the updated overview. Any earlier brochure must be built again before download.</p>
+      </article>
+
+      <article class="step" id="step-4">
+        <header class="step-head"><span class="step-no">4</span><h3>Approve and build the Word file</h3></header>
+        <p class="when">Starts when: you approve. Routes: <code>POST /sessions/{id}/approve</code>, then <code>GET /sessions/{id}/download</code>.</p>
+        <ol class="track">
+          <li class="code"><b>Resolve the brand text</b><small>workflow/service.py brand_text, your text first</small></li>
+          <li class="code"><b>Resolve the theme</b><small>core/theme.py resolve_theme, your primary colour and font first. The site font is used only if this machine has it, else Calibri.</small></li>
+          <li class="code"><b>Build the Word file</b><small>output/docx_builder.py build_brochure: preset, landscape, one table per face</small></li>
+          <li class="state"><b>Save the path</b><small>session.brochure_path, in output/&lt;id&gt;/</small></li>
+          <li class="code"><b>Download</b><small>web/routes.py download, returns brochure.docx</small></li>
+        </ol>
+        <p class="result"><strong>Ends with:</strong> brochure.docx. This step makes no model call.</p>
+      </article>
+    </section>
+
+    <section id="ai">
+      <h2>Where AI is used</h2>
+      <p class="lede">The model does three jobs. Everything else in the pipeline is code.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Step</th><th>Model calls</th><th>The model does</th><th>Code does instead</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1 Read the website</th><td>1, up to 2</td><td>Turns the site text into brand name, tagline, tone, and facts.</td><td>Browsing, robots.txt, colours, fonts, images, logo.</td></tr>
+            <tr><th scope="row">2 Plan the brochure</th><td>1, up to 2</td><td>Chooses the fold, the style, and the colours, and writes the panels.</td><td>Checks the plan: fold, cover, contact rule, images, colours, numbers, and emails.</td></tr>
+            <tr><th scope="row">3 Revise</th><td>1 per request, up to 2</td><td>Rewrites the plan from your request and the chat history.</td><td>Checks the reply again.</td></tr>
+            <tr><th scope="row">4 Approve</th><td>0</td><td>Nothing.</td><td>Builds the .docx from the saved plan.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        A model call retries once when the reply is not valid JSON for the expected shape, or when
+        a plan fails the plan check. A failed connection or an empty reply is not retried. A read or
+        a plan makes at most 2 calls. With one read and one plan and no revisions, the normal total
+        is 2 calls and the worst case is 4. Each revision adds 1 call normally, and at most 2. Each
+        extra read adds at most 2 as well.
+      </p>
+    </section>
+
+    <section id="saved">
+      <h2>What gets saved</h2>
+      <p class="lede">
+        Everything lives on the session in memory. Only the Word file and the image files, which
+        include the logo, are written to disk.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Stored on the session</th><th>Set by</th><th>Reset by</th><th>Read by</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>analysis</code>, <code>images</code>, <code>logo_path</code>, <code>colour_candidates</code>, <code>detected_font</code>, <code>source_text</code></th><td>Step 1</td><td>A new read replaces them.</td><td>Steps 2, 3, and 4. The session page and the overview page.</td></tr>
+            <tr><th scope="row"><code>brand_overrides</code></th><td>Step 2, when it succeeds</td><td>The next successful step 2 replaces it. A new read keeps it.</td><td>Steps 2, 3, and 4.</td></tr>
+            <tr><th scope="row"><code>theme_overrides</code></th><td>Step 2, when it succeeds</td><td>The next successful step 2 replaces it. A new read keeps it.</td><td>Step 4, and the overview page.</td></tr>
+            <tr><th scope="row"><code>fold</code></th><td>Step 2, when it succeeds</td><td>A new read clears it. A new plan replaces it.</td><td>Step 3.</td></tr>
+            <tr><th scope="row"><code>overview</code></th><td>Steps 2 and 3</td><td>A new read clears it. A new plan replaces it.</td><td>The overview page, and steps 3 and 4.</td></tr>
+            <tr><th scope="row"><code>history</code></th><td>Steps 2 and 3</td><td>A new read clears it. A new plan replaces it.</td><td>Step 3 only, sent with the next request.</td></tr>
+            <tr><th scope="row"><code>revisions</code></th><td>Step 3 adds the note</td><td>A new read and a new plan clear it.</td><td>The overview page.</td></tr>
+            <tr><th scope="row"><code>brochure_path</code></th><td>Step 4</td><td>A new read, a new plan, and a revision clear it.</td><td>The download route and the overview page.</td></tr>
+            <tr><th scope="row"><code>settings_form</code></th><td>The step 2 route, before the step runs. Kept even when the step fails.</td><td>A new read clears it.</td><td>The session page, to refill the form.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        Files: the logo and images go to <code>output/&lt;id&gt;/assets/</code>, and the Word file goes
+        to <code>output/&lt;id&gt;/</code>. A restart clears the sessions, but the files stay on disk.
+      </p>
+    </section>
+
+    <section id="fails">
+      <h2>When a step fails</h2>
+      <p class="lede">
+        Each step route passes through one helper, <code>_attempt</code>. It catches the three
+        expected error types and stores the message on the session. You see the message at the top
+        of the next page.
+      </p>
+      <ul>
+        <li><strong>Reading errors</strong> (site blocked, robots.txt disallows the site or cannot be checked, too little text): use the paste-text fallback, <code>POST /sessions/{id}/paste</code>. It analyzes the pasted text, with no images, no logo, and no detected colour or font.</li>
+        <li><strong>Model errors</strong> (endpoint unreachable, an empty reply, or a reply that is still invalid after the retry, including a plan that fails the plan check).</li>
+        <li><strong>Input errors</strong> (no URL or text, a colour or font in the wrong form, a logo that is too large or not a PNG or JPEG, no overview to revise or approve).</li>
+      </ul>
+      <div class="rule">
+        <strong>Failed steps keep the old state.</strong> Steps 1 to 3 call the model first and save
+        their results only after it succeeds. A failed step leaves the session as it was, except the
+        settings form, which keeps the typed values on purpose. Step 1 downloads its files under a new
+        name prefix, so older files are not overwritten. The previous read's files are deleted only
+        when the new read is saved. A logo upload is written only after the plan succeeds.
+      </div>
+    </section>
+
+    <section id="files">
+      <h2>Which file to open</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>If you want to change</th><th>Open</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Startup, server, or settings</th><td><code>__main__.py</code>, <code>web/app.py</code>, <code>core/config.py</code></td></tr>
+            <tr><th scope="row">A page, a form field, or a route</th><td><code>web/routes.py</code>, <code>web/templates/</code></td></tr>
+            <tr><th scope="row">How the site is read</th><td><code>reading/scraper.py</code></td></tr>
+            <tr><th scope="row">Which images are kept</th><td><code>reading/images.py</code>, <code>reading/assets.py</code></td></tr>
+            <tr><th scope="row">Colour or font detection</th><td><code>core/theme.py</code></td></tr>
+            <tr><th scope="row">The fold layouts</th><td><code>core/folds.py</code></td></tr>
+            <tr><th scope="row">Number and email checks</th><td><code>core/grounding.py</code></td></tr>
+            <tr><th scope="row">The brand or logo choice</th><td><code>core/brand.py</code></td></tr>
+            <tr><th scope="row">The AI prompts</th><td><code>llm/prompts.py</code></td></tr>
+            <tr><th scope="row">How model replies are validated</th><td><code>llm/client.py</code></td></tr>
+            <tr><th scope="row">The Word layout</th><td><code>output/docx_builder.py</code></td></tr>
+            <tr><th scope="row">Step order and the lock</th><td><code>workflow/service.py</code>, <code>workflow/session.py</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      For the code path of each step, see <a href="flow.html">the end-to-end flow</a>. For the
+      module reference and tests, see <a href="index.html">the code structure guide</a>.
+    </footer>
+  </main>
+
   <script src="script.js"></script>
 </body>
 </html>
