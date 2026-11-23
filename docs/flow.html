@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pagifyx end-to-end flow</title>
+  <meta name="description" content="Code-level flow of pagifyx, phase by phase, with the function that runs each step.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="flow.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="index.html">pagifyx</a>
+    <span class="tagline">End-to-end flow, code level</span>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" aria-label="Sections">
+      <ul>
+        <li><a href="#overview">Phases at a glance</a></li>
+        <li><a href="#legend">Lane legend</a></li>
+        <li><a href="#phase-0">Phase 0: startup</a></li>
+        <li><a href="#phase-1">Phase 1: read website</a></li>
+        <li><a href="#phase-2">Phase 2: plan the brochure</a></li>
+        <li><a href="#phase-3">Phase 3: revise</a></li>
+        <li><a href="#phase-4">Phase 4: approve and build</a></li>
+        <li><a href="#errors">Error path and locking</a></li>
+        <li><a href="pipeline.html">One-page overview</a></li>
+        <li><a href="index.html">Back to the guide</a></li>
+      </ul>
+    </nav>
+
+    <main class="content">
+
+      <section id="overview">
+        <h1>End-to-end flow, code level</h1>
+        <p class="lede">
+          One brochure goes through five phases. Each phase starts with one browser request and
+          ends with a redirect. Every step below names the function that runs it and where it lives.
+          Use the lane colour to see which layer does the work.
+        </p>
+
+        <div class="phase-strip" role="img" aria-label="Phases: startup, read website, plan the brochure, revise, approve and build">
+          <div class="phase-card">
+            <span class="phase-no">0</span>
+            <strong>Startup</strong>
+            <span class="muted">once per process</span>
+            <code>create_app()</code>
+          </div>
+          <div class="phase-card">
+            <span class="phase-no">1</span>
+            <strong>Read website</strong>
+            <span class="muted"><code>POST /sessions</code></span>
+            <code>read_website()</code>
+          </div>
+          <div class="phase-card">
+            <span class="phase-no">2</span>
+            <strong>Plan the brochure</strong>
+            <span class="muted"><code>POST /sessions/{id}/fold</code></span>
+            <code>choose_fold()</code>
+          </div>
+          <div class="phase-card">
+            <span class="phase-no">3</span>
+            <strong>Revise</strong>
+            <span class="muted"><code>POST /sessions/{id}/revise</code></span>
+            <code>revise()</code>
+          </div>
+          <div class="phase-card">
+            <span class="phase-no">4</span>
+            <strong>Approve and build</strong>
+            <span class="muted"><code>POST /sessions/{id}/approve</code></span>
+            <code>approve()</code>
+          </div>
+        </div>
+
+        <p class="note">
+          Phases 2 and 3 can repeat. Revise as many times as needed, then approve. Phase 4 can
+          run again after a revision, which clears the old download link.
+        </p>
+      </section>
+
+      <section id="legend">
+        <h2>Lane legend</h2>
+        <p>Each step is tagged with the layer that does the work.</p>
+        <div class="legend">
+          <span class="lane-tag lane-browser">Browser</span> the user's browser, forms and redirects
+          <span class="lane-tag lane-route">Route</span> <code>web/routes.py</code>, validates input, calls the service
+          <span class="lane-tag lane-service">Service</span> <code>workflow/service.py</code>, runs the workflow and commits state
+          <span class="lane-tag lane-collab">Collaborator</span> scraper, assets, theme, fonts, brand
+          <span class="lane-tag lane-model">Model</span> <code>llm/client.py</code> and <code>llm/prompts.py</code>, the LLM call
+          <span class="lane-tag lane-domain">Domain</span> folds, images, docx builder, the output file
+          <span class="lane-tag lane-state">State</span> <code>workflow/session.py</code>, in memory
+        </div>
+      </section>
+
+      <section id="phase-0">
+        <h2>Phase 0: startup</h2>
+        <p>Runs once when the server starts. It builds the objects the other phases share.</p>
+        <div class="chain" aria-label="Phase 0 chain">
+          <div class="node lane-route"><span class="lane">Entry</span><code>main()</code></div>
+          <div class="node lane-collab"><span class="lane">Config</span><code>get_settings()</code></div>
+          <div class="node lane-route"><span class="lane">Factory</span><code>create_app()</code></div>
+          <div class="node lane-model"><span class="lane">Model</span><code>ChatClient.from_settings()</code></div>
+          <div class="node lane-state"><span class="lane">State</span><code>SessionStore()</code></div>
+          <div class="node lane-service"><span class="lane">Service</span><code>BrochureService()</code></div>
+        </div>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Step</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>0.1</td><td><span class="lane-tag lane-route">Route</span></td><td><code>__main__.main()</code> <span class="where">__main__.py:8</span></td><td>Starts uvicorn on 127.0.0.1:8000 with <code>pagifyx.web.app:create_app</code> as the factory.</td></tr>
+              <tr><td>0.2</td><td><span class="lane-tag lane-collab">Collaborator</span></td><td><code>get_settings()</code> <span class="where">core/config.py:26</span></td><td>Reads <code>.env</code> into <code>Settings</code>. Missing LLM values stop the start here.</td></tr>
+              <tr><td>0.3</td><td><span class="lane-tag lane-route">Route</span></td><td><code>create_app()</code> <span class="where">web/app.py:18</span></td><td>Creates the FastAPI app, mounts static files, and stores <code>Deps</code> on <code>app.state</code>.</td></tr>
+              <tr><td>0.4</td><td><span class="lane-tag lane-model">Model</span></td><td><code>ChatClient.from_settings()</code> <span class="where">llm/client.py:48</span></td><td>Creates the OpenAI client with the endpoint and key from settings.</td></tr>
+              <tr><td>0.5</td><td><span class="lane-tag lane-state">State</span></td><td><code>SessionStore()</code> <span class="where">workflow/session.py:105</span></td><td>Empty in-memory store. Output goes under <code>output/</code>.</td></tr>
+              <tr><td>0.6</td><td><span class="lane-tag lane-service">Service</span></td><td><code>BrochureService()</code> <span class="where">workflow/service.py:197</span></td><td>Holds the chat client. All workflow steps run on this object.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="phase-1">
+        <h2>Phase 1: read website</h2>
+        <p>
+          Trigger: <code>POST /sessions</code> with a URL. Result: a session with the site's
+          analysis, images, logo, and detected colour and font. Then the browser follows the
+          redirect to the session page.
+        </p>
+        <div class="chain chain-wrap" aria-label="Phase 1 chain">
+          <div class="node lane-browser"><span class="lane">Browser</span><code>POST /sessions</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>create_session()</code></div>
+          <div class="node lane-state"><span class="lane">State</span><code>store.create()</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>_attempt()</code></div>
+          <div class="node lane-service"><span class="lane">Service</span><code>read_website()</code></div>
+          <div class="node lane-collab"><span class="lane">Scraper</span><code>scrape_site()</code></div>
+          <div class="node lane-model"><span class="lane">Model</span><code>_analyze()</code></div>
+          <div class="node lane-collab"><span class="lane">Assets</span><code>_download_assets()</code></div>
+          <div class="node lane-collab"><span class="lane">Theme</span><code>detect_*()</code></div>
+          <div class="node lane-state"><span class="lane">State</span><code>commit_read()</code></div>
+          <div class="node lane-browser"><span class="lane">Browser</span><code>303 → GET session</code></div>
+        </div>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Step</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>1.1</td><td><span class="lane-tag lane-browser">Browser</span></td><td><code>POST /sessions</code></td><td>Sends the URL from the form.</td></tr>
+              <tr><td>1.2</td><td><span class="lane-tag lane-route">Route</span></td><td><code>create_session()</code> <span class="where">web/routes.py:94</span></td><td>Creates the session and calls the read step through <code>_attempt()</code>.</td></tr>
+              <tr><td>1.3</td><td><span class="lane-tag lane-state">State</span></td><td><code>SessionStore.create()</code> <span class="where">workflow/session.py:112</span></td><td>Makes a <code>Session</code> with a new id and output folder.</td></tr>
+              <tr><td>1.4</td><td><span class="lane-tag lane-route">Route</span></td><td><code>_attempt()</code> <span class="where">web/routes.py:61</span></td><td>Runs the step. Catches <code>ScrapeError</code>, <code>LLMError</code>, <code>BrochureError</code> and stores the message on the session.</td></tr>
+              <tr><td>1.5</td><td><span class="lane-tag lane-service">Service</span></td><td><code>BrochureService.read_website()</code> <span class="where">workflow/service.py:203</span></td><td>Takes <code>session.lock</code>, then runs the steps below in order.</td></tr>
+              <tr><td>1.6</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>coerce_start_url()</code> <span class="where">reading/scraper.py:174</span></td><td>Adds https if missing and normalizes the URL. Bad input raises <code>ScrapeError</code>.</td></tr>
+              <tr><td>1.7</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_load_robots()</code> <span class="where">reading/scraper.py:223</span></td><td>Fetches robots.txt with httpx. A 4xx means allow all. A 5xx or no response means disallow all.</td></tr>
+              <tr><td>1.8</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_launch()</code> <span class="where">reading/scraper.py:250</span></td><td>Starts headless Chromium. A missing browser raises <code>ScrapeError</code> with the install command.</td></tr>
+              <tr><td>1.9</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_read_homepage()</code> <span class="where">reading/scraper.py:344</span></td><td>Opens the homepage, checks it has at least 200 characters of text, then captures the logo.</td></tr>
+              <tr><td>1.10</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_open()</code> <span class="where">reading/scraper.py:259</span></td><td>Navigates and waits for network idle (10 s cap). Rejects HTTP 400+ and redirects into disallowed paths.</td></tr>
+              <tr><td>1.11</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_extract()</code> <span class="where">reading/scraper.py:279</span></td><td>Runs the in-page script. It collects text, colours from surfaces and headings, fonts, logo candidates, image sizes, and nav, header, and footer links.</td></tr>
+              <tr><td>1.12</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_capture_logo()</code> <span class="where">reading/scraper.py:305</span></td><td>Calls <code>choose_logo()</code> (<code>core/brand.py:25</code>) and captures the logo mark as PNG bytes on a transparent background, at 8x density. Writes no files.</td></tr>
+              <tr><td>1.13</td><td><span class="lane-tag lane-collab">Scraper</span></td><td><code>_crawl_nav()</code> <span class="where">reading/scraper.py:379</span></td><td>Reads up to 5 same-domain links from <code>select_nav_links()</code>. Each page goes through <code>_read_page()</code>. A failed page is logged and skipped.</td></tr>
+              <tr><td>1.14</td><td><span class="lane-tag lane-service">Service</span></td><td><code>site_text()</code> <span class="where">workflow/service.py:52</span></td><td>Joins the page text under source headers. Caps the result at 12,000 characters.</td></tr>
+              <tr><td>1.15</td><td><span class="lane-tag lane-model">Model</span></td><td><code>_analyze()</code> <span class="where">workflow/service.py:326</span></td><td>Builds the messages with <code>system_message()</code> and <code>analysis_request()</code> (<code>llm/prompts.py:55</code>), then calls <code>complete_json(SiteAnalysis)</code>.</td></tr>
+              <tr><td>1.16</td><td><span class="lane-tag lane-model">Model</span></td><td><code>ChatClient.complete()</code> <span class="where">llm/client.py:55</span></td><td>Sends one Chat Completions request. Empty replies and API errors raise <code>LLMError</code>.</td></tr>
+              <tr><td>1.17</td><td><span class="lane-tag lane-model">Model</span></td><td><code>_parse()</code> <span class="where">llm/client.py:31</span></td><td>Strips code fences and validates with pydantic. On failure, retries once with the error text. A second failure raises <code>LLMError</code>.</td></tr>
+              <tr><td>1.18</td><td><span class="lane-tag lane-service">Service</span></td><td><code>_download_assets()</code> <span class="where">workflow/service.py:167</span></td><td>Runs after the model has answered. Downloads the images and logo under a new file prefix, so earlier files are not overwritten. If a download fails, it removes the new files and re-raises.</td></tr>
+              <tr><td>1.19</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>select_images()</code> <span class="where">reading/images.py:26</span></td><td>Keeps images at least 400 px wide. Drops SVG, favicon, pixel, and tracking images. Largest first, max 8.</td></tr>
+              <tr><td>1.20</td><td><span class="lane-tag lane-collab">Assets</span></td><td><code>download_images()</code> <span class="where">reading/assets.py:47</span></td><td>Fetches each candidate with <code>fetch_bytes()</code> (<code>reading/assets.py:25</code>). Keeps only files that pass <code>is_embeddable()</code> (<code>reading/images.py:58</code>). Writes <code>img-N</code> files.</td></tr>
+              <tr><td>1.21</td><td><span class="lane-tag lane-collab">Assets</span></td><td><code>store_logo()</code> <span class="where">reading/assets.py:36</span></td><td>Saves the logo mark as <code>logo.png</code>. If there is none, fetches the og:image and saves that instead.</td></tr>
+              <tr><td>1.22</td><td><span class="lane-tag lane-collab">Theme</span></td><td><code>candidate_colours()</code> <span class="where">core/theme.py:226</span>, <code>detect_font_family()</code> <span class="where">core/theme.py:221</span></td><td>Lists the most common saturated colours on the site. The plan chooses its primary and accent from this list. The font is the most common concrete family.</td></tr>
+              <tr><td>1.23</td><td><span class="lane-tag lane-state">State</span></td><td><code>Session.commit_read()</code> <span class="where">workflow/session.py:63</span></td><td>Replaces the site data in one step, after all the steps above succeeded. Deletes the previous read's files unless the new read uses them. An uploaded logo is never deleted. The lock releases when <code>read_website()</code> returns.</td></tr>
+              <tr><td>1.24</td><td><span class="lane-tag lane-route">Route</span></td><td><code>session_page()</code> <span class="where">web/routes.py:101</span></td><td>Shows the brand summary and the fold, brand, and theme form. On error, shows the message with Retry and Paste text.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="phase-2">
+        <h2>Phase 2: plan the brochure</h2>
+        <p>
+          Trigger: <code>POST /sessions/{id}/fold</code>. Result: an overview with exactly one
+          panel per section of the chosen fold. The fold, overrides, and overview are stored only
+          if the model call succeeds.
+        </p>
+        <div class="chain chain-wrap" aria-label="Phase 2 chain">
+          <div class="node lane-browser"><span class="lane">Browser</span><code>POST /fold</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>choose_fold()</code></div>
+          <div class="node lane-collab"><span class="lane">Brand</span><code>save_logo_upload()</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>build_*_overrides()</code></div>
+          <div class="node lane-service"><span class="lane">Service</span><code>choose_fold()</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>plan_request()</code></div>
+          <div class="node lane-model"><span class="lane">Model</span><code>_ask()</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>check_plan()</code></div>
+          <div class="node lane-state"><span class="lane">State</span><code>commit</code></div>
+          <div class="node lane-browser"><span class="lane">Browser</span><code>GET overview</code></div>
+        </div>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Step</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>2.1</td><td><span class="lane-tag lane-browser">Browser</span></td><td><code>POST /sessions/{id}/fold</code></td><td>Sends the fold (blank lets the model choose), brand and contact fields, colour, font, and an optional logo.</td></tr>
+              <tr><td>2.2</td><td><span class="lane-tag lane-route">Route</span></td><td><code>choose_fold()</code> <span class="where">web/routes.py:125</span></td><td>Parses the fold. Saves a new logo upload if one was sent. Builds the brand overrides, including contact, and the theme overrides.</td></tr>
+              <tr><td>2.3</td><td><span class="lane-tag lane-collab">Theme</span></td><td><code>save_logo_upload()</code> <span class="where">workflow/service.py:92</span></td><td>Enforces 5 MB, then stores the upload with <code>store_logo()</code>. Rejects anything python-docx cannot embed.</td></tr>
+              <tr><td>2.4</td><td><span class="lane-tag lane-service">Service</span></td><td><code>BrochureService.choose_fold()</code> <span class="where">workflow/service.py:236</span></td><td>Takes <code>session.lock</code>. Needs an analysis. Merges the form's contact details over the site's.</td></tr>
+              <tr><td>2.5</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>plan_request()</code> <span class="where">llm/prompts.py:66</span></td><td>Builds the plan request: the analysis, the fold rule (fixed or the model's choice), the presets, the website colour list, the panels in print order, the images, and whether contact details exist.</td></tr>
+              <tr><td>2.6</td><td><span class="lane-tag lane-model">Model</span></td><td><code>_ask()</code> <span class="where">workflow/service.py:331</span></td><td>Sends <code>[system, user]</code> and asks for an <code>Overview</code>: fold, design, and panels.</td></tr>
+              <tr><td>2.7</td><td><span class="lane-tag lane-model">Model</span></td><td><code>ChatClient.complete_json()</code> <span class="where">llm/client.py:67</span></td><td>Validates the JSON with pydantic. On failure, retries once with the error text.</td></tr>
+              <tr><td>2.8</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>_plan_check()</code> <span class="where">workflow/service.py:137</span></td><td>Builds the checks every reply must pass. The fold asked for must match. Primary and accent must come from the website colour list.</td></tr>
+              <tr><td>2.9</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>check_plan()</code> <span class="where">core/folds.py:45</span></td><td>Panel count matches the fold. One Cover, as the last outside panel. Contact only with contact details. Gallery needs an image. Headlines present. Each image exists and is used once.</td></tr>
+              <tr><td>2.10</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>check_grounding()</code> <span class="where">core/grounding.py:34</span></td><td>Every number and email in the text must appear in the website text or the form. Otherwise the reply is rejected.</td></tr>
+              <tr><td>2.11</td><td><span class="lane-tag lane-state">State</span></td><td>commit in <code>choose_fold()</code></td><td>Only after success: sets the overrides, fold, overview, and history. Clears the revisions and the old brochure.</td></tr>
+              <tr><td>2.12</td><td><span class="lane-tag lane-route">Route</span></td><td><code>overview_page()</code> <span class="where">web/routes.py:160</span></td><td>Redirect target. Shows the fold, the style, and the panels in print order. Generated panels are marked.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="phase-3">
+        <h2>Phase 3: revise</h2>
+        <p>
+          Trigger: <code>POST /sessions/{id}/revise</code> with a change request. Result: a new
+          overview that keeps the history, plus one more entry in the revision log. A failed
+          revision changes nothing.
+        </p>
+        <div class="chain chain-wrap" aria-label="Phase 3 chain">
+          <div class="node lane-browser"><span class="lane">Browser</span><code>POST /revise</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>revise()</code></div>
+          <div class="node lane-service"><span class="lane">Service</span><code>revise()</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>revision_request()</code></div>
+          <div class="node lane-model"><span class="lane">Model</span><code>_ask(history)</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>check_plan()</code></div>
+          <div class="node lane-state"><span class="lane">State</span><code>commit</code></div>
+          <div class="node lane-browser"><span class="lane">Browser</span><code>GET overview</code></div>
+        </div>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Step</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>3.1</td><td><span class="lane-tag lane-browser">Browser</span></td><td><code>POST /sessions/{id}/revise</code></td><td>Sends the change request as plain text.</td></tr>
+              <tr><td>3.2</td><td><span class="lane-tag lane-route">Route</span></td><td><code>revise()</code> <span class="where">web/routes.py:184</span></td><td>Calls the service step through <code>_attempt()</code>.</td></tr>
+              <tr><td>3.3</td><td><span class="lane-tag lane-service">Service</span></td><td><code>BrochureService.revise()</code> <span class="where">workflow/service.py:272</span></td><td>Strips the note and rejects an empty one. Takes the lock. Requires an existing overview.</td></tr>
+              <tr><td>3.4</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>revision_request()</code> <span class="where">llm/prompts.py:132</span></td><td>Wraps the note: revise, return all panels, keep the rest unchanged.</td></tr>
+              <tr><td>3.5</td><td><span class="lane-tag lane-model">Model</span></td><td><code>_ask([*history, request])</code> <span class="where">workflow/service.py:331</span></td><td>Sends the full history plus the new request. The history is not changed yet.</td></tr>
+              <tr><td>3.6</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>_plan_check()</code>, <code>check_plan()</code>, <code>check_grounding()</code></td><td>The same checks as phase 2. The revised plan must keep the fold the user chose.</td></tr>
+              <tr><td>3.7</td><td><span class="lane-tag lane-state">State</span></td><td>commit in <code>revise()</code></td><td>Replaces the overview, appends the note to <code>revisions</code>, appends the user and assistant turns to history, and clears <code>brochure_path</code>.</td></tr>
+              <tr><td>3.8</td><td><span class="lane-tag lane-route">Route</span></td><td>redirect to <code>overview_page()</code></td><td>The page re-renders with the new cards and the revision log.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="phase-4">
+        <h2>Phase 4: approve and build</h2>
+        <p>
+          Trigger: <code>POST /sessions/{id}/approve</code>. No model call happens in this phase.
+          Result: <code>output/&lt;session&gt;/brochure.docx</code>, served by the download route.
+        </p>
+        <div class="chain chain-wrap" aria-label="Phase 4 chain">
+          <div class="node lane-browser"><span class="lane">Browser</span><code>POST /approve</code></div>
+          <div class="node lane-route"><span class="lane">Route</span><code>approve()</code></div>
+          <div class="node lane-service"><span class="lane">Service</span><code>approve()</code></div>
+          <div class="node lane-collab"><span class="lane">Theme</span><code>resolve_theme()</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>build_brochure()</code></div>
+          <div class="node lane-domain"><span class="lane">Domain</span><code>face_panels()</code></div>
+          <div class="node lane-domain"><span class="lane">Builder</span><code>_write_face()</code></div>
+          <div class="node lane-domain"><span class="lane">Builder</span><code>_fill_panel()</code></div>
+          <div class="node lane-state"><span class="lane">Output</span><code>brochure.docx</code></div>
+          <div class="node lane-browser"><span class="lane">Browser</span><code>GET download</code></div>
+        </div>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Step</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What it does</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>4.1</td><td><span class="lane-tag lane-browser">Browser</span></td><td><code>POST /sessions/{id}/approve</code></td><td>Asks for the file to be built.</td></tr>
+              <tr><td>4.2</td><td><span class="lane-tag lane-route">Route</span></td><td><code>approve()</code> <span class="where">web/routes.py:192</span></td><td>Calls the service step through <code>_attempt()</code>.</td></tr>
+              <tr><td>4.3</td><td><span class="lane-tag lane-service">Service</span></td><td><code>BrochureService.approve()</code> <span class="where">workflow/service.py:304</span></td><td>Takes the lock. Builds the brand text, the <code>BrochureBrand</code>, and the theme. Passes the image paths from <code>session.image_paths()</code>.</td></tr>
+              <tr><td>4.4</td><td><span class="lane-tag lane-collab">Theme</span></td><td><code>resolve_theme()</code> <span class="where">core/theme.py:78</span> → <code>resolve_font()</code> <span class="where">core/fonts.py:35</span></td><td>Your primary colour overrides the plan's. Your font overrides the site font, which is used only if this Windows machine has it. The palette is derived from the primary: paper, ink, and an accent, darkened until the text reads.</td></tr>
+              <tr><td>4.5</td><td><span class="lane-tag lane-domain">Builder</span></td><td><code>build_brochure()</code> <span class="where">output/docx_builder.py:170</span></td><td>Creates the document, sets the Normal font, and splits the panels with <code>face_panels()</code>.</td></tr>
+              <tr><td>4.6</td><td><span class="lane-tag lane-domain">Builder</span></td><td><code>_set_landscape_letter()</code> <span class="where">output/docx_builder.py:208</span></td><td>One section per face. Landscape Letter with 0.5 in margins.</td></tr>
+              <tr><td>4.7</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>_look()</code> <span class="where">output/docx_builder.py:146</span>, <code>_write_face()</code> <span class="where">output/docx_builder.py:216</span></td><td><code>_look()</code> picks each preset's fills and text colours. <code>_write_face()</code> makes one table row, at least 7.2 in tall, with one column per panel and the THREE_ACROSS or TWO_ACROSS sizes.</td></tr>
+              <tr><td>4.8</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>_fill_panel()</code> <span class="where">output/docx_builder.py:249</span></td><td>Routes each panel. The cover goes to <code>_fill_cover()</code>: the message, logo, name, and tagline. A gallery panel shows its image only. Other panels go to <code>_fill_text()</code>.</td></tr>
+              <tr><td>4.9</td><td><span class="lane-tag lane-domain">Domain</span></td><td><code>_fill_text()</code>, <code>_add_bullet()</code>, <code>_add_picture()</code>, <code>_accent_rule()</code></td><td>Headline with no label above it. The accent rule appears only in the Paper preset. Body is paragraphs, or bullets for three or more lines. The image sits at the top.</td></tr>
+              <tr><td>4.10</td><td><span class="lane-tag lane-domain">Builder</span></td><td><code>_set_side_padding()</code>, <code>_set_right_border()</code>, <code>_shade()</code>, <code>_insert_ordered()</code></td><td>Writes cell XML in schema order. Word reports the file as damaged if the order is wrong.</td></tr>
+              <tr><td>4.11</td><td><span class="lane-tag lane-domain">Builder</span></td><td><code>_end_with_spacer()</code> <span class="where">output/docx_builder.py:198</span></td><td>Adds the paragraph Word requires after the last table. Keeps spacers at 1 pt so none adds a page.</td></tr>
+              <tr><td>4.12</td><td><span class="lane-tag lane-domain">Output</span></td><td><code>document.save()</code></td><td>Writes <code>output/&lt;session&gt;/brochure.docx</code>. Service sets <code>session.brochure_path</code>. The lock releases.</td></tr>
+              <tr><td>4.13</td><td><span class="lane-tag lane-route">Route</span></td><td><code>download()</code> <span class="where">web/routes.py:198</span>, <code>session_file()</code> <span class="where">web/routes.py:205</span></td><td>Serves the <code>.docx</code> as an attachment. Serves images only from the session's assets folder, after a path check.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="errors">
+        <h2>Error path and locking</h2>
+        <div class="table-wrap">
+          <table class="steps">
+            <thead>
+              <tr><th scope="col">Case</th><th scope="col">Lane</th><th scope="col">Code</th><th scope="col">What happens</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>E.1</td><td><span class="lane-tag lane-route">Route</span></td><td><code>_attempt()</code> <span class="where">web/routes.py:61</span></td><td>Workflow errors (<code>ScrapeError</code>, <code>LLMError</code>, <code>BrochureError</code>) are stored on <code>session.error</code>. The route still redirects.</td></tr>
+              <tr><td>E.2</td><td><span class="lane-tag lane-state">State</span></td><td><code>Session.take_error()</code> <span class="where">workflow/session.py:95</span></td><td>The next page that renders shows the message once, then clears it.</td></tr>
+              <tr><td>E.3</td><td><span class="lane-tag lane-route">Route</span></td><td>any other exception</td><td>Not caught. It becomes an HTTP 500. These are bugs, not user errors.</td></tr>
+              <tr><td>E.4</td><td><span class="lane-tag lane-service">Service</span></td><td><code>session.lock</code> in every mutating step</td><td>Two requests for the same session run one after the other. Each step computes in locals and commits only on success.</td></tr>
+              <tr><td>E.5</td><td><span class="lane-tag lane-state">State</span></td><td><code>SessionStore</code> <span class="where">workflow/session.py:105</span></td><td>Sessions live in a dictionary. A restart loses them. Files under <code>output/</code> stay on disk.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="foot">
+        Generated by hand from the code. Line numbers match the current source. When you change a
+        step, update the matching row here.
+      </footer>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

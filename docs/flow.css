@@ -1,0 +1,155 @@
+/* Styles for the end-to-end flow page. Shares tokens and layout with styles.css. */
+
+:root {
+  --lane-browser: #6b7280;
+  --lane-route: #2563eb;
+  --lane-service: #1f4e79;
+  --lane-collab: #0f766e;
+  --lane-model: #7c3aed;
+  --lane-domain: #b45309;
+  --lane-state: #475569;
+}
+
+/* Phase cards across the top */
+
+.phase-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 1.25rem 0;
+}
+
+.phase-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 0.92rem;
+}
+
+.phase-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.phase-card code { overflow-wrap: anywhere; }
+
+/* Lane tags, used in legend and tables */
+
+.lane-tag {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+
+.lane-browser { --lane: var(--lane-browser); }
+.lane-route { --lane: var(--lane-route); }
+.lane-service { --lane: var(--lane-service); }
+.lane-collab { --lane: var(--lane-collab); }
+.lane-model { --lane: var(--lane-model); }
+.lane-domain { --lane: var(--lane-domain); }
+.lane-state { --lane: var(--lane-state); }
+
+.lane-tag { background: var(--lane, var(--lane-state)); }
+
+.legend { line-height: 2.1; }
+
+/* Chains: one row of boxes per phase, arrows in between */
+
+.chain {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.5rem 0 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.chain-wrap { flex-wrap: wrap; row-gap: 0.6rem; }
+
+.node {
+  --lane: var(--lane-state);
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 8.5rem;
+  max-width: 13rem;
+  padding: 0.45rem 0.6rem 0.5rem;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--lane);
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.node + .node::before {
+  content: "→";
+  position: absolute;
+  left: -0.62rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.chain-wrap .node + .node::before { content: "→"; }
+
+.node .lane {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lane);
+  margin-bottom: 0.2rem;
+}
+
+.node code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+/* Step tables */
+
+table.steps td:first-child {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+table.steps td:nth-child(2) { white-space: nowrap; }
+
+.where {
+  display: inline-block;
+  margin-left: 0.25rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.muted { color: var(--muted); }
+
+@media (max-width: 860px) {
+  .phase-strip { grid-template-columns: 1fr 1fr; }
+}

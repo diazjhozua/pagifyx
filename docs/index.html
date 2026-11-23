@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>pagifyx code structure</title>
+  <meta name="description" content="A guide to how the pagifyx code is organized, module by module.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#start">pagifyx</a>
+    <span class="tagline">Code structure guide</span>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" aria-label="Sections">
+      <ul>
+        <li><a href="#start">Start here</a></li>
+        <li><a href="#picture">The big picture</a></li>
+        <li><a href="#journey">The user journey</a></li>
+        <li><a href="pipeline.html">How it works (one page)</a></li>
+        <li><a href="flow.html">End-to-end flow (code level)</a></li>
+        <li><a href="#tree">Folder tree</a></li>
+        <li><a href="#modules">Module reference</a></li>
+        <li><a href="#ideas">Key ideas</a></li>
+        <li><a href="#tests">Tests</a></li>
+        <li><a href="#recipes">Common changes</a></li>
+        <li><a href="#gaps">Known gaps</a></li>
+      </ul>
+    </nav>
+
+    <main class="content">
+
+      <section id="start">
+        <h1>pagifyx code structure</h1>
+        <p class="lede">
+          pagifyx turns an existing company website into a print-ready brochure. It reads the
+          site with a browser, asks an AI model to plan the brochure, lets the user revise the
+          plan in a chat, and then writes a <code>.docx</code> file the user can edit in Word.
+        </p>
+        <p>
+          This guide explains how the code is organized. Read the first two sections for the
+          shape of the system. Read the module reference when you need to change something.
+        </p>
+
+        <h2>Run it</h2>
+        <pre><code>uv python install 3.12
+uv sync
+uv run playwright install chromium
+# copy .env.template to .env, then set LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
+uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
+        <p class="note">
+          The app will not start without the three <code>LLM_*</code> values in <code>.env</code>.
+        </p>
+      </section>
+
+      <section id="picture">
+        <h2>The big picture</h2>
+        <p>
+          The code is layered. Each layer only talks to the layer directly below it. The web
+          layer knows about HTTP. The service layer knows about the workflow. The layers below
+          do one job each and know nothing about the web or the workflow.
+        </p>
+
+        <div class="layers" role="img" aria-label="Five layers, top to bottom: browser, web routes, service workflow, collaborators, foundations">
+          <div class="layer layer-browser">
+            <strong>Browser</strong>
+            <span>Forms, redirects, the overview cards, the downloaded .docx</span>
+          </div>
+          <div class="layer layer-web">
+            <strong>web/routes.py</strong>
+            <span>Routes. Reads form input, calls the service, redirects. Returns HTML or files.</span>
+          </div>
+          <div class="layer layer-service">
+            <strong>workflow/service.py</strong>
+            <span>The brochure workflow. Each step locks the session, computes its results, and commits them only on success.</span>
+          </div>
+          <div class="layer layer-collab">
+            <strong>Collaborators: each does one job</strong>
+            <span class="cell">reading/scraper.py</span>
+            <span class="cell">llm/client.py + llm/prompts.py</span>
+            <span class="cell">reading/assets.py</span>
+            <span class="cell">core/theme.py</span>
+            <span class="cell">core/brand.py</span>
+            <span class="cell">core/folds.py</span>
+            <span class="cell">output/docx_builder.py</span>
+            <span class="cell">workflow/session.py</span>
+          </div>
+          <div class="layer layer-foundation">
+            <strong>Foundations: used by everything above</strong>
+            <span class="cell">core/models.py</span>
+            <span class="cell">reading/images.py</span>
+            <span class="cell">core/fonts.py</span>
+            <span class="cell">core/config.py</span>
+          </div>
+        </div>
+
+        <p class="rule">
+          Three rules keep this clean. The scraper never touches the disk. The docx builder never
+          calls the model. The routes never call Playwright or the model directly.
+        </p>
+      </section>
+
+      <section id="journey">
+        <h2>The user journey</h2>
+        <p>
+          Every user action is one HTTP request. Each request maps to one service method. The
+          tables below show the call chain for each step. For a phase-by-phase diagram with the
+          function and line number for every step, see <a href="flow.html">the end-to-end flow</a>.
+        </p>
+
+        <h3>1. Read the website</h3>
+        <p><code>POST /sessions</code> with a URL, or <code>POST /sessions/{id}/retry</code>.</p>
+        <ol class="chain">
+          <li><code>web.create_session</code> creates a <code>Session</code> and calls <code>service.read_website</code>.</li>
+          <li><code>scraper.scrape_site</code> opens the homepage and up to 5 same-domain nav links in headless Chromium. It returns a <code>SiteSnapshot</code>. It checks robots.txt first.</li>
+          <li><code>assets.download_images</code> keeps the best images (see <code>images.select_images</code>). <code>assets.store_logo</code> saves the logo mark, or the og:image if there is no logo element.</li>
+          <li><code>theme.candidate_colours</code> and <code>theme.detect_font_family</code> read the computed styles collected by the scraper. The plan picks its colours from the candidates.</li>
+          <li><code>BrochureService._analyze</code> asks the model for a <code>SiteAnalysis</code> through <code>ChatClient.complete_json</code>.</li>
+        </ol>
+        <p class="note">Fallback: <code>POST /sessions/{id}/paste</code> analyzes text the user pasted when the site blocks the reader.</p>
+
+        <h3>2. Choose a fold and generate the overview</h3>
+        <p><code>POST /sessions/{id}/fold</code> with the fold, brand, and theme fields.</p>
+        <ol class="chain">
+          <li><code>web.choose_fold</code> reads the fold (blank lets the model choose), saves the logo upload if there is one, and builds <code>BrandOverrides</code> (with contact details) and <code>ThemeOverrides</code> through the helpers in <code>workflow/service.py</code>.</li>
+          <li><code>service.choose_fold</code> takes the session lock and builds the plan request with <code>prompts.plan_request</code>.</li>
+          <li>The model reply is validated by <code>folds.check_plan</code> and <code>grounding.check_grounding</code>. The panel count must match the fold, and every number or email must appear in the website text or the form.</li>
+          <li>Only after success does the service store the fold, overrides, overview, and chat history. A failed attempt leaves the previous plan in place.</li>
+        </ol>
+
+        <h3>3. Revise in chat</h3>
+        <p><code>POST /sessions/{id}/revise</code> with a change request.</p>
+        <ol class="chain">
+          <li><code>service.revise</code> sends the full history plus the new request to the model.</li>
+          <li>On success it replaces the overview, appends the request to <code>revisions</code>, and clears the download link for any earlier <code>.docx</code>.</li>
+        </ol>
+
+        <h3>4. Approve and download</h3>
+        <p><code>POST /sessions/{id}/approve</code>, then <code>GET /sessions/{id}/download</code>.</p>
+        <ol class="chain">
+          <li><code>service.approve</code> calls <code>docx_builder.build_brochure</code> with the brand, the resolved theme, and the image files.</li>
+          <li>The builder splits the panels into two faces with <code>folds.face_panels</code>. It writes one landscape Letter section and one table per face.</li>
+          <li>The route serves <code>output/&lt;session&gt;/brochure.docx</code>.</li>
+        </ol>
+      </section>
+
+      <section id="tree">
+        <h2>Folder tree</h2>
+        <pre><code>pagifyx/
+├── CLAUDE.md             project brief, decisions, developer notes
+├── GLOSSARY.md           vocabulary only
+├── docs/                 this guide (static)
+├── pyproject.toml        dependencies, Ruff and pytest settings, `pagifyx` command
+├── .env.template         copy to .env and fill in the LLM settings
+├── .python-version       3.12
+├── src/pagifyx/
+│   ├── __init__.py       version
+│   ├── __main__.py       `uv run pagifyx` starts the server
+│   ├── core/                shared rules and data; imports nothing above it
+│   │   ├── config.py        settings read from .env
+│   │   ├── models.py        pydantic data shapes
+│   │   ├── folds.py         fold layouts and overview checks
+│   │   ├── theme.py         palette (rgb, oklch, oklab) and font detection; resolved theme
+│   │   ├── fonts.py         installed-font check (Windows registry)
+│   │   ├── brand.py         logo choice; brand overrides
+│   │   └── grounding.py     numbers and emails must appear in the source
+│   ├── reading/             read the company website
+│   │   ├── scraper.py       Playwright website reader
+│   │   ├── images.py        image selection and embeddability checks
+│   │   └── assets.py        image and logo downloads and storage
+│   ├── llm/                 talk to the model
+│   │   ├── client.py        Chat Completions client with JSON validation
+│   │   └── prompts.py       system prompt and message builders
+│   ├── output/              write the Word file
+│   │   └── docx_builder.py  writes the .docx
+│   ├── workflow/            the steps and their state
+│   │   ├── service.py       the brochure workflow
+│   │   └── session.py       one brochure in progress; in-memory store
+│   └── web/                 browser interface
+│       ├── app.py           create_app(): wires the parts together
+│       ├── routes.py        HTTP routes (thin)
+│       ├── templates/       Jinja2 pages: base, index, session, overview
+│       └── static/app.css   styles for the web app
+└── tests/                   offline tests, grouped like src/pagifyx
+    ├── conftest.py          shared fixtures (scripted LLM, settings)
+    ├── core/                test_folds, test_theme, test_brand
+    ├── reading/             test_images, test_scraper
+    ├── llm/                 test_llm
+    ├── output/              test_docx_builder
+    └── web/                 test_web_flow</code></pre>
+        <p class="note">
+          Generated files go to <code>output/</code>. It is created at runtime and is gitignored.
+        </p>
+      </section>
+
+      <section id="modules">
+        <h2>Module reference</h2>
+        <p>Listed roughly from the top of the stack to the bottom.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Module</th><th scope="col">What it does</th><th scope="col">Key names</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row"><code>web/app.py</code></th>
+                <td>Builds the FastAPI app. Stores the shared parts (store, service, templates) on <code>app.state.deps</code>. Mounts static files and the router.</td>
+                <td><code>create_app()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>__main__.py</code></th>
+                <td>Starts uvicorn on 127.0.0.1:8000 with the app factory.</td>
+                <td><code>main()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>web/routes.py</code></th>
+                <td>One route per user action. Validates form input and maps workflow errors to a message on the session. Redirects with 303 after each POST.</td>
+                <td><code>router</code>, <code>Deps</code>, <code>_attempt()</code>, <code>choose_fold()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>workflow/service.py</code></th>
+                <td>The workflow. Each method holds <code>session.lock</code>, computes new state in local variables, and commits only after the model call succeeds.</td>
+                <td><code>BrochureService</code>, <code>BrochureError</code>, <code>build_theme_overrides()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>workflow/session.py</code></th>
+                <td>All state for one brochure: URL, analysis, images, overrides, fold, overview, chat history, revisions, output path, pending error. The store is a dictionary in memory.</td>
+                <td><code>Session</code>, <code>SessionStore</code>, <code>clear_plan()</code>, <code>image_paths()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>llm/client.py</code></th>
+                <td>Wraps the OpenAI-compatible Chat Completions API. <code>complete_json()</code> asks for JSON, validates it with pydantic and an optional check, and retries once with the error text.</td>
+                <td><code>ChatClient</code>, <code>LLMError</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>llm/prompts.py</code></th>
+                <td>The system prompt and the message builders for analysis, overview, and revision. Brochure copy rules live here.</td>
+                <td><code>SYSTEM_PROMPT</code>, <code>plan_request()</code>, <code>revision_request()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>reading/scraper.py</code></th>
+                <td>Reads the site with Playwright. Checks robots.txt, follows up to 5 same-domain links from nav, header, and footer, takes a logo screenshot, and collects colors, fonts, and image candidates. Writes no files.</td>
+                <td><code>scrape_site()</code>, <code>SiteSnapshot</code>, <code>ScrapeError</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>reading/assets.py</code></th>
+                <td>Downloads images and stores logos. Only files python-docx can embed are kept.</td>
+                <td><code>download_images()</code>, <code>store_logo()</code>, <code>ImageAsset</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>reading/images.py</code></th>
+                <td>Chooses which images suit a brochure: at least 400 px wide, at most 8, largest first. Drops SVG, favicon, and tracking images.</td>
+                <td><code>select_images()</code>, <code>is_embeddable()</code>, <code>sniff_image_type()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/brand.py</code></th>
+                <td>Brand identity helpers: picks the logo element from candidates and holds the user's brand overrides (name, tagline, logo).</td>
+                <td><code>choose_logo()</code>, <code>BrandOverrides</code>, <code>LogoHint</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/theme.py</code></th>
+                <td>The visual system: palette and font. Detects them from computed styles, applies overrides, and produces the <code>Theme</code> used by the builder.</td>
+                <td><code>Theme</code>, <code>Palette</code>, <code>ThemeOverrides</code>, <code>resolve_theme()</code>, <code>build_palette()</code>, <code>candidate_colours()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/fonts.py</code></th>
+                <td>Checks which font families are installed on Windows (registry). Falls back to Calibri when the site font is missing or on other systems.</td>
+                <td><code>resolve_font()</code>, <code>installed_font_families()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/folds.py</code></th>
+                <td>The fold layouts: how many panels each side has. The model chooses the fold; <code>check_plan()</code> checks a plan against it.</td>
+                <td><code>FoldSpec</code>, <code>FOLD_SPECS</code>, <code>get_fold_spec()</code>, <code>check_plan()</code>, <code>face_panels()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/grounding.py</code></th>
+                <td>Checks that every number and email in a plan appears in the website text or the form. A failed check makes the model retry.</td>
+                <td><code>check_grounding()</code>, <code>unsupported_details()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/models.py</code></th>
+                <td>The data shapes exchanged with the model and used by the builder. Null values from the model become empty strings or lists.</td>
+                <td><code>FoldType</code>, <code>PanelSection</code>, <code>Preset</code>, <code>Design</code>, <code>Panel</code>, <code>Overview</code>, <code>SiteAnalysis</code>, <code>LOGO_IMAGE_ID</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>output/docx_builder.py</code></th>
+                <td>Writes the brochure. Landscape Letter, one section per face, one table per face with one column per panel. The cover is shaded with the primary color.</td>
+                <td><code>build_brochure()</code>, <code>BrochureBrand</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>core/config.py</code></th>
+                <td>Reads <code>.env</code> and the environment into a <code>Settings</code> object.</td>
+                <td><code>Settings</code>, <code>get_settings()</code></td>
+              </tr>
+              <tr>
+                <th scope="row"><code>web/templates/</code> and <code>web/static/</code></th>
+                <td>Jinja2 pages (base, index, session, overview) and one stylesheet.</td>
+                <td><code>session.html</code>, <code>overview.html</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="ideas">
+        <h2>Key ideas</h2>
+
+        <h3>Theme and Brand are separate</h3>
+        <p>
+          <strong>Theme</strong> is the visual system: palette and font. It lives in
+          <code>core/theme.py</code>. <strong>Brand</strong> is the identity: name, tagline, and logo.
+          It lives in <code>core/brand.py</code> and <code>core/models.py</code>. The form, the overrides,
+          and the docx builder keep the two apart. The vocabulary is defined in
+          <code>GLOSSARY.md</code>.
+        </p>
+
+        <h3>Folds have faces</h3>
+        <p>
+          A brochure is a sheet with two sides, and each side is a row of panels. A
+          <code>FoldSpec</code> fixes how many panels each side has. The model chooses which
+          sections fill them, in print order: the outside side left to right, then the inside
+          side. The cover is always the last panel on the outside side, which puts it on the
+          outside right, next to the back.
+        </p>
+
+        <h3>A plan must fit its fold and its source</h3>
+        <p>
+          The model returns one plan: a fold, a design, and the panels. <code>check_plan()</code>
+          rejects a wrong panel count, a cover in the wrong place, a Contact panel without contact
+          details, and unknown or repeated images. <code>check_grounding()</code> rejects any number
+          or email that is not in the website text or the form. The colours must come from the
+          website's own list. The model gets one retry with the error text.
+        </p>
+
+        <h3>Steps commit only on success</h3>
+        <p>
+          Every service method that changes a session runs under <code>session.lock</code>. It
+          computes the new fold, overview, and history in local variables. It assigns them to the
+          session only after the model call succeeds. A failed call therefore never leaves a
+          mismatched plan, such as the old overview paired with a new fold.
+        </p>
+
+        <h3>Errors are shown, not raised</h3>
+        <p>
+          Workflow errors (<code>ScrapeError</code>, <code>LLMError</code>,
+          <code>BrochureError</code>) are caught by <code>web._attempt()</code>. The message is
+          stored on the session and shown on the next page. Anything else is a bug and surfaces as
+          a server error.
+        </p>
+
+        <h3>The scraper only reads</h3>
+        <p>
+          <code>scrape_site()</code> returns a <code>SiteSnapshot</code>. That is raw page text,
+          colors, fonts, image candidates, and a logo screenshot as bytes. Saving files is
+          <code>reading/assets.py</code>'s job. This keeps the browser code easy to test and replace.
+        </p>
+
+        <h3>Fallbacks</h3>
+        <ul>
+          <li>Blocked site: the user can paste the site's text instead.</li>
+          <li>No logo element: the og:image is used.</li>
+          <li>Site font not installed (or not on Windows): Calibri is used.</li>
+          <li>Model returns null: treated as an empty string or list.</li>
+        </ul>
+      </section>
+
+      <section id="tests">
+        <h2>Tests</h2>
+        <p>
+          The tests run offline. The model is replaced by a scripted fake (the
+          <code>make_chat</code> fixture in <code>conftest.py</code>). The browser is replaced by
+          a monkeypatched <code>scrape_site</code>. Run them with
+          <code>uv run pytest</code>.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">File</th><th scope="col">What it covers</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row"><code>core/test_folds.py</code></th><td>Panel counts, faces, overview checks, and presentation order.</td></tr>
+              <tr><th scope="row"><code>core/test_theme.py</code></th><td>Color parsing (rgb, oklch, oklab), palette and font detection, override precedence.</td></tr>
+              <tr><th scope="row"><code>core/test_brand.py</code></th><td>Logo choice from candidates.</td></tr>
+              <tr><th scope="row"><code>core/test_grounding.py</code></th><td>Numbers and emails in a plan must appear in the source.</td></tr>
+              <tr><th scope="row"><code>reading/test_images.py</code></th><td>Image selection and embeddability checks.</td></tr>
+              <tr><th scope="row"><code>reading/test_scraper.py</code></th><td>URL normalization and nav link selection.</td></tr>
+              <tr><th scope="row"><code>output/test_docx_builder.py</code></th><td>Section orientation, panel placement, the three presets, gallery panels, cover message.</td></tr>
+              <tr><th scope="row"><code>llm/test_llm.py</code></th><td>JSON parsing, code-fence stripping, the single retry.</td></tr>
+              <tr><th scope="row"><code>web/test_web_flow.py</code></th><td>The full HTTP flow with a stubbed scraper. Failed steps keep the previous state. A revision clears the old download.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          Ruff checks format and style: <code>uv run ruff format src tests</code> then
+          <code>uv run ruff check src tests</code>.
+        </p>
+      </section>
+
+      <section id="recipes">
+        <h2>Common changes</h2>
+
+        <h3>Swap the AI provider</h3>
+        <p>Edit <code>.env</code> only: <code>LLM_BASE_URL</code>, <code>LLM_API_KEY</code>, <code>LLM_MODEL</code>. The endpoint must support Chat Completions.</p>
+
+        <h3>Add a fold</h3>
+        <ol>
+          <li>Add a member to <code>FoldType</code> in <code>core/folds.py</code>.</li>
+          <li>Add a value to <code>FoldType</code>, a <code>FoldSpec</code> with its <code>panels_per_side</code>, and list it in the fold rule of <code>plan_request</code>.</li>
+          <li>Add a test in <code>core/test_folds.py</code>. The builder reads the plan and the spec, so the only other files that change are the prompt and the fold list.</li>
+        </ol>
+
+        <h3>Add or change a panel section</h3>
+        <ol>
+          <li>Add the member to <code>PanelSection</code> in <code>core/models.py</code>.</li>
+          <li>Place it on a face in each fold that uses it. The prompt and the builder pick it up from there.</li>
+          <li>Update the tests that list sections, and the copy rules in <code>llm/prompts.py</code>, if the new section needs guidance.</li>
+        </ol>
+
+        <h3>Add a brand or theme override</h3>
+        <ol>
+          <li>Add the field to <code>BrandOverrides</code> (core/brand.py) or <code>ThemeOverrides</code> (core/theme.py).</li>
+          <li>Add the form field to <code>web/templates/session.html</code>.</li>
+          <li>Read it in <code>web.choose_fold</code>, validate it in the <code>build_*_overrides</code> helpers in <code>workflow/service.py</code>, and apply it where the value is used (<code>service.approve</code> or <code>theme.resolve_theme</code>).</li>
+        </ol>
+
+        <h3>Change what the model is asked to do</h3>
+        <p>Edit the prompts in <code>llm/prompts.py</code>. Keep the JSON shape in sync with <code>core/models.py</code>, because pydantic rejects anything else and the model gets one retry.</p>
+      </section>
+
+      <section id="gaps">
+        <h2>Known gaps</h2>
+        <ul>
+          <li>The Z-fold <code>.docx</code> is identical to the tri-fold. The "panels fold opposite ways" instruction is not printed.</li>
+          <li>Inside faces look sparse when the site has little copy or few images. The lower half of a panel stays empty.</li>
+          <li>The <code>generated</code> flag is the model's own judgment. Code checks numbers and emails only, not invented claims.</li>
+          <li>Sessions live in memory and are lost when the server restarts.</li>
+          <li>Image checks read file headers only. A truncated image can still embed.</li>
+          <li>Font detection only works on Windows. Elsewhere every site font falls back to Calibri.</li>
+        </ul>
+      </section>
+
+      <footer class="foot">
+        Static guide for the pagifyx code. No build step: open <code>index.html</code> or serve this folder.
+      </footer>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

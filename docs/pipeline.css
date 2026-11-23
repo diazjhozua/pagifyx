@@ -1,0 +1,211 @@
+/* Styles for the one-page overview. Shares tokens and layout with styles.css. */
+
+/* Parts diagram */
+
+.map {
+  margin: 1.25rem 0 0.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--wash);
+}
+
+.map-row {
+  display: grid;
+  gap: 0.6rem;
+  align-items: stretch;
+}
+
+.map-row.top { grid-template-columns: 1fr 2rem 1fr 2rem 1fr; }
+.map-row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+.map-row + .map-row { margin-top: 0.4rem; }
+
+.map-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.map-glyph.down {
+  margin: 0.2rem 0;
+  font-size: 0.85rem;
+}
+
+.box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.8rem;
+  background: var(--paper);
+  font-size: 0.93rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.box strong { display: block; }
+
+.box small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.box.you { background: var(--ink); border-color: var(--ink); color: #fff; }
+.box.you small { color: #d3d7dd; }
+
+.box.flow { background: var(--accent); border-color: var(--accent); color: #fff; }
+.box.flow small { color: #d6e4f2; }
+
+.box.code { border-top: 4px solid var(--lane-service); }
+.box.ai { background: #f5f1ff; border-color: var(--lane-model); border-top: 4px solid var(--lane-model); }
+.box.out { border-style: dashed; background: var(--wash); }
+
+.box.state {
+  background: var(--accent-soft);
+  border-color: #bcd0e8;
+}
+
+.map-wide { margin-top: 0.6rem; }
+
+/* Colour key under the parts diagram */
+
+.key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.key span { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.chip {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.chip-flow { background: var(--accent); border-color: var(--accent); }
+.chip-code { background: var(--paper); border: 1px solid var(--lane-service); border-top-width: 3px; }
+.chip-ai { background: #f5f1ff; border-color: var(--lane-model); }
+.chip-out { background: var(--wash); border: 1px dashed var(--muted); }
+
+/* Steps */
+
+.step {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.step-head h2 { margin: 0; }
+
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.when {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* Track: one row of boxes per step, read left to right */
+
+.track {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.95rem;
+  row-gap: 0.75rem;
+  list-style: none;
+  margin: 0.9rem 0 0;
+  padding: 0;
+}
+
+.track > li {
+  position: relative;
+  flex: 0 1 11.5rem;
+  min-width: 9rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--lane-service);
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.track > li.ai {
+  border-top-color: var(--lane-model);
+  background: #f8f5ff;
+}
+
+.track > li.state {
+  border-top-color: var(--lane-state);
+  background: var(--wash);
+}
+
+.track > li b {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-weight: 600;
+}
+
+.track > li small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.track > li + li::before {
+  content: "→";
+  position: absolute;
+  left: -0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.result {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 0.93rem;
+}
+
+/* Small screens */
+
+@media (max-width: 860px) {
+  .map-row.top { grid-template-columns: 1fr; }
+  .map-row.top .map-glyph { display: none; }
+  .map-row.four { grid-template-columns: 1fr 1fr; }
+  .map-row.four > div:empty { display: none; }
+  .map-row.four .map-glyph { display: none; }
+  .track > li + li::before { display: none; }
+}
