@@ -6,6 +6,7 @@ succeeds. A failed step therefore leaves the previous state intact.
 
 import re
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -35,7 +36,7 @@ from pagifyx.llm.prompts import (
 )
 from pagifyx.output.docx_builder import BrochureBrand, build_brochure
 from pagifyx.reading.assets import ImageAsset, download_images, fetch_bytes, store_logo
-from pagifyx.reading.images import select_images
+from pagifyx.reading.images import is_embeddable, select_images, sniff_image_type
 from pagifyx.reading.scraper import USER_AGENT, PageSnapshot, SiteSnapshot, scrape_site
 from pagifyx.workflow.session import Session
 
@@ -89,11 +90,17 @@ def build_theme_overrides(*, primary_color: str, font_family: str) -> ThemeOverr
     return ThemeOverrides(primary_color=color.upper(), font_family=font)
 
 
-def save_logo_upload(session: Session, data: bytes) -> Path:
-    """Store a user-uploaded logo after checking that python-docx can embed it."""
+def check_logo_upload(data: bytes) -> None:
+    """Reject an uploaded logo before any model call: its size, then its format."""
     if len(data) > MAX_LOGO_BYTES:
         raise BrochureError("The logo must be 5 MB or smaller.")
-    # A new name per upload: the logo in use by the current plan is never overwritten.
+    if sniff_image_type(data) is None or not is_embeddable(data):
+        raise BrochureError("The logo must be a PNG or JPEG image that Word can embed.")
+
+
+def save_logo_upload(session: Session, data: bytes) -> Path:
+    """Store a checked logo under a new name, so the logo the plan uses is never overwritten."""
+    check_logo_upload(data)
     path = store_logo(session.assets_dir, data, stem=f"logo-upload-{uuid4().hex[:8]}")
     if path is None:
         raise BrochureError("The logo must be a PNG or JPEG image that Word can embed.")
@@ -137,7 +144,7 @@ def _sources(session: Session, brand: BrandOverrides) -> list[str]:
 
 def _plan_check(
     session: Session,
-    logo: Path | None,
+    has_logo: bool,
     brand: BrandOverrides,
     *,
     contact_available: bool,
@@ -145,7 +152,7 @@ def _plan_check(
 ) -> Callable[[Overview], None]:
     """Build the check every model reply must pass before it becomes the plan."""
     image_ids = {image.image_id for image in session.images}
-    if logo is not None:
+    if has_logo:
         image_ids.add(LOGO_IMAGE_ID)
     sources = _sources(session, brand)
 
@@ -240,19 +247,26 @@ class BrochureService:
         fold: FoldType | None,
         brand: BrandOverrides,
         theme: ThemeOverrides,
+        logo_upload: bytes | None = None,
     ) -> None:
-        """Make the first plan. `fold` None lets the model choose the fold."""
+        """Make the first plan. `fold` None lets the model choose the fold.
+
+        An uploaded logo is written to disk only after the plan succeeds. A failed step
+        therefore leaves no file behind, and the logo in use stays as it was.
+        """
+        if logo_upload is not None:
+            check_logo_upload(logo_upload)
         async with session.lock:
             if session.analysis is None:
                 raise BrochureError("Read a website before choosing a fold.")
             analysis = _with_overrides(session.analysis, brand)
-            logo = brand.logo_path or session.logo_path
+            has_logo = logo_upload is not None or (brand.logo_path or session.logo_path) is not None
             contact_available = analysis.content.contact.has_details()
             request = user_turn(
                 plan_request(
                     analysis,
                     session.images,
-                    has_logo=logo is not None,
+                    has_logo=has_logo,
                     colours=session.colour_candidates,
                     fold=fold,
                     contact_available=contact_available,
@@ -260,8 +274,12 @@ class BrochureService:
             )
             plan = await self._ask(
                 [request],
-                _plan_check(session, logo, brand, contact_available=contact_available, fold=fold),
+                _plan_check(
+                    session, has_logo, brand, contact_available=contact_available, fold=fold
+                ),
             )
+            if logo_upload is not None:
+                brand = replace(brand, logo_path=save_logo_upload(session, logo_upload))
             replaced_logo = session.brand_overrides.logo_path
             session.brand_overrides = brand
             session.theme_overrides = theme
@@ -290,7 +308,7 @@ class BrochureService:
                 [*session.history, request],
                 _plan_check(
                     session,
-                    session.effective_logo(),
+                    session.effective_logo() is not None,
                     brand,
                     contact_available=contact_available,
                     fold=fold,

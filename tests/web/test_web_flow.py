@@ -362,6 +362,37 @@ def test_failed_step_keeps_the_approved_logo(
     assert approved.read_bytes() == approved_bytes
 
 
+def test_failed_step_writes_no_logo_file(
+    settings: Settings, make_chat: Any, stub_scrape: None
+) -> None:
+    chat, _ = make_chat([ANALYSIS_JSON, "bad", "bad"])
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+    client.post(
+        f"/sessions/{session_id}/fold",
+        data=fold_form("tri"),
+        files={"logo": ("new.png", png_bytes(40), "image/png")},
+    )
+
+    session = client.app.state.deps.store.get(session_id)
+    assert session.brand_overrides.logo_path is None
+    assert list(session.assets_dir.glob("logo-upload-*")) == []
+
+
+def test_bad_logo_is_refused_before_the_model_call(
+    settings: Settings, make_chat: Any, stub_scrape: None
+) -> None:
+    chat, _ = make_chat([ANALYSIS_JSON])  # no plan reply scripted: the model must not be called
+    client = TestClient(create_app(settings, chat))
+    session_id = open_site(client)
+    response = client.post(
+        f"/sessions/{session_id}/fold",
+        data=fold_form("tri"),
+        files={"logo": ("logo.svg", b"<svg></svg>", "image/svg+xml")},
+    )
+    assert "must be a PNG or JPEG" in response.text
+
+
 def test_pasted_text_reads_a_blocked_site(
     settings: Settings, make_chat: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

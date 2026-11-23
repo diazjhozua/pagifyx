@@ -17,7 +17,6 @@ from pagifyx.workflow.service import (
     BrochureService,
     build_brand_overrides,
     build_theme_overrides,
-    save_logo_upload,
 )
 from pagifyx.workflow.session import Session, SessionNotFound, SessionStore
 
@@ -180,18 +179,16 @@ async def choose_fold(
     async def apply() -> None:
         chosen = _parse_fold(fold)
         theme = build_theme_overrides(primary_color=primary_color, font_family=font_family)
-        logo_path = session.brand_overrides.logo_path
-        if logo is not None and logo.filename:
-            logo_path = save_logo_upload(session, await logo.read())
         brand = build_brand_overrides(
             brand_name=brand_name,
             tagline=tagline,
-            logo_path=logo_path,
+            logo_path=session.brand_overrides.logo_path,
             phone=phone,
             email=email,
             address=address,
         )
-        await deps.service.choose_fold(session, chosen, brand, theme)
+        upload = await logo.read() if logo is not None and logo.filename else None
+        await deps.service.choose_fold(session, chosen, brand, theme, logo_upload=upload)
 
     if not await _attempt(session, apply()):
         return _redirect(f"/sessions/{session.id}")
