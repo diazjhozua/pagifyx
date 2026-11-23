@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>Make a brochure from a website</h1>
+  <p class="muted">pagifyx reads the company's website, then drafts a brochure in its theme and logo. You review the plan, then download an editable .docx.</p>
+  <form method="post" action="/sessions" class="stack">
+    <label>Website address
+      <input type="text" name="url" required placeholder="https://example.com">
+    </label>
+    <button type="submit">Read website</button>
+  </form>
+</section>
+{% endblock %}

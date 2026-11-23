@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Brochure settings · pagifyx{% endblock %}
+{% block content %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if session.analysis is none %}
+<section class="card">
+  <h1>Could not read {{ session.url }}</h1>
+  <p class="muted">Retry, or paste the site's text if the site blocks automated reading.</p>
+  <form method="post" action="/sessions/{{ session.id }}/retry">
+    <button type="submit">Retry</button>
+  </form>
+  <form method="post" action="/sessions/{{ session.id }}/paste" class="stack">
+    <label>Site text
+      <textarea name="text" rows="12" required></textarea>
+    </label>
+    <button type="submit">Use pasted text</button>
+  </form>
+</section>
+{% else %}
+<section class="card">
+  <h1>{{ session.analysis.brand.name or session.url }}</h1>
+  <p>{{ session.analysis.brand.tagline }}</p>
+  <p class="muted">Language: {{ session.analysis.language }} · Images found: {{ session.images|length }} · Logo: {{ "found" if session.logo_path else "not found" }}</p>
+</section>
+<section class="card">
+  <form method="post" action="/sessions/{{ session.id }}/fold" enctype="multipart/form-data" class="stack">
+    <h2>Fold</h2>
+    <label class="option">
+      <input type="radio" name="fold" value="" checked>
+      <strong>Let pagifyx choose</strong> <span class="muted">The plan picks the fold from the website's content.</span>
+    </label>
+    {% for fold, spec in folds %}
+    <label class="option">
+      <input type="radio" name="fold" value="{{ fold.value }}">
+      <strong>{{ spec.label }}</strong> <span class="muted">{{ spec.description }}</span>
+    </label>
+    {% endfor %}
+
+    <h2>Brand</h2>
+    <label>Brand name <input type="text" name="brand_name" value="{{ session.analysis.brand.name }}"></label>
+    <label>Tagline <input type="text" name="tagline" value="{{ session.analysis.brand.tagline }}"></label>
+    <label>Logo (PNG or JPEG) <input type="file" name="logo" accept="image/png,image/jpeg"></label>
+
+    <h2>Contact details</h2>
+    <p class="muted">The brochure prints only the contact details the website states or you enter here. A blank field prints nothing.</p>
+    <label>Phone <input type="text" name="phone" value="{{ session.analysis.content.contact.phone or '' }}"></label>
+    <label>Email <input type="text" name="email" value="{{ session.analysis.content.contact.email or '' }}"></label>
+    <label>Address <input type="text" name="address" value="{{ session.analysis.content.contact.address or '' }}"></label>
+
+    <h2>Theme</h2>
+    <label>Primary color <input type="text" name="primary_color" placeholder="Leave blank to let the plan choose from {{ session.colour_candidates|join(', ') }}"></label>
+    <label>Font <input type="text" name="font_family" placeholder="Leave blank to use the site font if installed, else Calibri"></label>
+
+    <button type="submit">Generate overview</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
