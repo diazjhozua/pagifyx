@@ -4,7 +4,7 @@ pagifyx turns an existing company website into a print-ready brochure (.docx). I
 
 ## Scenario
 
-The company already has a website, a theme, a logo, and a brand. The brochure is built from those, not designed from scratch. Vocabulary (Website, Theme, Brand, Fold, Panel, Overview, Revision, Approval) is defined in `GLOSSARY.md`.
+The company already has a website, a theme, a logo, and a brand. The brochure is built from those, not designed from scratch. Terms: Website, Theme, Brand, Fold, Overview, Revision, Approval. A Face is one side of a Brochure. A Panel is one cell on a Face.
 
 ## Current state
 
@@ -19,19 +19,18 @@ The original plan is built. This section is the reference for working on it.
 - Brand (name, tagline, logo) lives in `core/brand.py` and `core/models.py`. Theme (palette, font) lives in `core/theme.py`. Keep them separate.
 - Workflow steps run under `Session.lock`. Compute the new state in locals and assign it only after the LLM call succeeds.
 - Module reference and a step-by-step code walkthrough: `docs/index.html` (static guide, update by hand when modules change).
-- Setup and workflow files in place: `.gitignore` (ignores `.env`, `/output/`), `.env.template`, `GLOSSARY.md`.
+- Setup and workflow files in place: `.gitignore` (ignores `.env`, `/output/`), `.env.template`.
 
 ## Working rules
 
 - Git: work on `main`. Commit only when the user asks.
-- `GLOSSARY.md` holds vocabulary only. Keep implementation detail out of it.
 - Pydantic models treat null from the model as empty text or an empty list (`BeforeValidator` in `core/models.py`).
 - Routes in `web/routes.py` catch workflow errors through `_attempt`. Do not add `try` blocks to each route.
 
 ### Developer notes
 
 - Setup: `uv python install 3.12`, `uv sync`, `uv run playwright install chromium`. Copy `.env.template` to `.env` first. The app fails at startup without the three LLM variables.
-- Checks: `uv run ruff format src tests`, `uv run ruff check src tests`, `uv run pytest`. The 84 tests are offline. They use the `make_chat` fixture (scripted LLM) and monkeypatch `pagifyx.workflow.service.scrape_site`. Async tests use an `asyncio.run` helper, because pytest-asyncio is not installed.
+- Checks: `uv run ruff format src tests`, `uv run ruff check src tests`, `uv run pytest`. The 88 tests are offline. They use the `make_chat` fixture (scripted LLM) and monkeypatch `pagifyx.workflow.service.scrape_site`. Async tests use an `asyncio.run` helper, because pytest-asyncio is not installed.
 - Real-browser check: there is no fixture site in the repo. Serve a folder with `python -m http.server 8765` and call `scrape_site("http://127.0.0.1:8765/")`.
 - Image validation uses python-docx `Image.from_blob` (`images.is_embeddable`). It checks headers only, so truncated images can still embed.
 - Font detection reads the Windows registry (`core/fonts.py`). On other platforms every site font falls back to Calibri.

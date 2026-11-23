@@ -150,7 +150,6 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
         <h2>Folder tree</h2>
         <pre><code>pagifyx/
 ├── CLAUDE.md             project brief, decisions, developer notes
-├── GLOSSARY.md           vocabulary only
 ├── docs/                 this guide (static)
 ├── pyproject.toml        dependencies, Ruff and pytest settings, `pagifyx` command
 ├── .env.template         copy to .env and fill in the LLM settings
@@ -313,8 +312,8 @@ uv run pagifyx            # open http://127.0.0.1:8000</code></pre>
           <strong>Theme</strong> is the visual system: palette and font. It lives in
           <code>core/theme.py</code>. <strong>Brand</strong> is the identity: name, tagline, and logo.
           It lives in <code>core/brand.py</code> and <code>core/models.py</code>. The form, the overrides,
-          and the docx builder keep the two apart. The vocabulary is defined in
-          <code>GLOSSARY.md</code>.
+          and the docx builder keep the two apart. The terms are listed in
+          <code>CLAUDE.md</code>.
         </p>
 
         <h3>Folds have faces</h3>
