@@ -32,8 +32,11 @@ A Fold with 6 Panels, 3 per side, in a standard letter fold.
 **Z-fold**:
 A Fold with 6 Panels on the same grid as Tri-fold, where the panels fold in opposite directions.
 
+**Face**:
+One side of a Brochure. A Face holds its Panels left to right, as printed. A Tri-fold has an Outside Face and an Inside Face.
+
 **Panel**:
-One face of a Brochure, the unit that the Overview plans.
+One cell on a Face, the unit that the Overview plans.
 
 ## Review
 

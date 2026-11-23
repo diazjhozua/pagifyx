@@ -23,7 +23,7 @@ The original plan is built. This section is the reference for working on it.
 
 ## Working rules
 
-- Git: the repo is initialized with no commits. Commit only when the user asks.
+- Git: work on `main`. Commit only when the user asks.
 - `GLOSSARY.md` holds vocabulary only. Keep implementation detail out of it.
 - Pydantic models treat null from the model as empty text or an empty list (`BeforeValidator` in `core/models.py`).
 - Routes in `web/routes.py` catch workflow errors through `_attempt`. Do not add `try` blocks to each route.
